@@ -1,4 +1,4 @@
-WEBSITE TEMPLATE
+Website Template
 ================
 
 For E-bureauet frontend developer collaboration
