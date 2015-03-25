@@ -15,7 +15,7 @@ module.exports = function (grunt)
 					'bower_components/modernizr/modernizr.js',
 					'bower_components/jquery/dist/jquery.js',
 					'bower_components/bootstrap/dist/js/bootstrap.js',
-					'bower_components/slick/dist/slick.min.js'
+					'bower_components/owl.carousel/dist/owl.carousel.min.js'
 				],
 				dest: 'src/scripts/main-deps.js'
 			},
