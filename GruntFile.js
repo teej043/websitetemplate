@@ -14,7 +14,8 @@ module.exports = function (grunt)
 				src: [
 					'bower_components/modernizr/modernizr.js',
 					'bower_components/jquery/dist/jquery.js',
-					'bower_components/bootstrap/dist/js/bootstrap.js'
+					'bower_components/bootstrap/dist/js/bootstrap.js',
+					'bower_components/slick/dist/slick.min.js'
 				],
 				dest: 'src/scripts/main-deps.js'
 			},
@@ -35,6 +36,21 @@ module.exports = function (grunt)
 			}
 		},
 
+		includereplace: {
+	    src: {
+	      options: {
+					prefix: '<!-- @@',
+		      suffix: ' -->',
+					includesDir: 'src/includes',
+					docroot: ''
+	      },
+	      // Files to perform replacements and includes with
+	      src: 'src/*.html',
+	      // Destination directory to copy files to
+	      dest: 'dist/'
+	    }
+	  },
+
 		watch: {
 			scripts: {
 				files: ['src/scripts/**/*.js'],
@@ -43,6 +59,10 @@ module.exports = function (grunt)
 			css: {
 				files: 'src/css/**/**/*.scss',
 				tasks: ['compass','concat:css']
+			},
+			html: {
+				files: 'src/**/*.html',
+				tasks: ['includereplace']
 			}
 		}
 	});
@@ -53,12 +73,14 @@ module.exports = function (grunt)
 	grunt.loadNpmTasks('grunt-contrib-compass');
 	grunt.loadNpmTasks('grunt-contrib-uglify');
 	grunt.loadNpmTasks('grunt-contrib-watch');
+	grunt.loadNpmTasks('grunt-include-replace');
 
 	//tasks
 	grunt.registerTask('default', 'Default Task Alias', ['build']);
 
 	grunt.registerTask('build', 'Build the application',
 		['compass',
-		'concat'
+		'concat',
+		'includereplace'
 		]);
 }
