@@ -1,7 +1,6 @@
 #Website Template
-================
 
-##For E-bureauet frontend developer collaboration
+###For E-bureauet frontend developer collaboration
 
 The aim of this project is to create our own basic frontend template as foundation for all future websites we will develop. This template should conform to the best practices and standards.
 
