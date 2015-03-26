@@ -1,4 +1,1412 @@
 /*!
+ * Modernizr v2.8.3
+ * www.modernizr.com
+ *
+ * Copyright (c) Faruk Ates, Paul Irish, Alex Sexton
+ * Available under the BSD and MIT licenses: www.modernizr.com/license/
+ */
+
+/*
+ * Modernizr tests which native CSS3 and HTML5 features are available in
+ * the current UA and makes the results available to you in two ways:
+ * as properties on a global Modernizr object, and as classes on the
+ * <html> element. This information allows you to progressively enhance
+ * your pages with a granular level of control over the experience.
+ *
+ * Modernizr has an optional (not included) conditional resource loader
+ * called Modernizr.load(), based on Yepnope.js (yepnopejs.com).
+ * To get a build that includes Modernizr.load(), as well as choosing
+ * which tests to include, go to www.modernizr.com/download/
+ *
+ * Authors        Faruk Ates, Paul Irish, Alex Sexton
+ * Contributors   Ryan Seddon, Ben Alman
+ */
+
+window.Modernizr = (function( window, document, undefined ) {
+
+    var version = '2.8.3',
+
+    Modernizr = {},
+
+    /*>>cssclasses*/
+    // option for enabling the HTML classes to be added
+    enableClasses = true,
+    /*>>cssclasses*/
+
+    docElement = document.documentElement,
+
+    /**
+     * Create our "modernizr" element that we do most feature tests on.
+     */
+    mod = 'modernizr',
+    modElem = document.createElement(mod),
+    mStyle = modElem.style,
+
+    /**
+     * Create the input element for various Web Forms feature tests.
+     */
+    inputElem /*>>inputelem*/ = document.createElement('input') /*>>inputelem*/ ,
+
+    /*>>smile*/
+    smile = ':)',
+    /*>>smile*/
+
+    toString = {}.toString,
+
+    // TODO :: make the prefixes more granular
+    /*>>prefixes*/
+    // List of property values to set for css tests. See ticket #21
+    prefixes = ' -webkit- -moz- -o- -ms- '.split(' '),
+    /*>>prefixes*/
+
+    /*>>domprefixes*/
+    // Following spec is to expose vendor-specific style properties as:
+    //   elem.style.WebkitBorderRadius
+    // and the following would be incorrect:
+    //   elem.style.webkitBorderRadius
+
+    // Webkit ghosts their properties in lowercase but Opera & Moz do not.
+    // Microsoft uses a lowercase `ms` instead of the correct `Ms` in IE8+
+    //   erik.eae.net/archives/2008/03/10/21.48.10/
+
+    // More here: github.com/Modernizr/Modernizr/issues/issue/21
+    omPrefixes = 'Webkit Moz O ms',
+
+    cssomPrefixes = omPrefixes.split(' '),
+
+    domPrefixes = omPrefixes.toLowerCase().split(' '),
+    /*>>domprefixes*/
+
+    /*>>ns*/
+    ns = {'svg': 'http://www.w3.org/2000/svg'},
+    /*>>ns*/
+
+    tests = {},
+    inputs = {},
+    attrs = {},
+
+    classes = [],
+
+    slice = classes.slice,
+
+    featureName, // used in testing loop
+
+
+    /*>>teststyles*/
+    // Inject element with style element and some CSS rules
+    injectElementWithStyles = function( rule, callback, nodes, testnames ) {
+
+      var style, ret, node, docOverflow,
+          div = document.createElement('div'),
+          // After page load injecting a fake body doesn't work so check if body exists
+          body = document.body,
+          // IE6 and 7 won't return offsetWidth or offsetHeight unless it's in the body element, so we fake it.
+          fakeBody = body || document.createElement('body');
+
+      if ( parseInt(nodes, 10) ) {
+          // In order not to give false positives we create a node for each test
+          // This also allows the method to scale for unspecified uses
+          while ( nodes-- ) {
+              node = document.createElement('div');
+              node.id = testnames ? testnames[nodes] : mod + (nodes + 1);
+              div.appendChild(node);
+          }
+      }
+
+      // <style> elements in IE6-9 are considered 'NoScope' elements and therefore will be removed
+      // when injected with innerHTML. To get around this you need to prepend the 'NoScope' element
+      // with a 'scoped' element, in our case the soft-hyphen entity as it won't mess with our measurements.
+      // msdn.microsoft.com/en-us/library/ms533897%28VS.85%29.aspx
+      // Documents served as xml will throw if using &shy; so use xml friendly encoded version. See issue #277
+      style = ['&#173;','<style id="s', mod, '">', rule, '</style>'].join('');
+      div.id = mod;
+      // IE6 will false positive on some tests due to the style element inside the test div somehow interfering offsetHeight, so insert it into body or fakebody.
+      // Opera will act all quirky when injecting elements in documentElement when page is served as xml, needs fakebody too. #270
+      (body ? div : fakeBody).innerHTML += style;
+      fakeBody.appendChild(div);
+      if ( !body ) {
+          //avoid crashing IE8, if background image is used
+          fakeBody.style.background = '';
+          //Safari 5.13/5.1.4 OSX stops loading if ::-webkit-scrollbar is used and scrollbars are visible
+          fakeBody.style.overflow = 'hidden';
+          docOverflow = docElement.style.overflow;
+          docElement.style.overflow = 'hidden';
+          docElement.appendChild(fakeBody);
+      }
+
+      ret = callback(div, rule);
+      // If this is done after page load we don't want to remove the body so check if body exists
+      if ( !body ) {
+          fakeBody.parentNode.removeChild(fakeBody);
+          docElement.style.overflow = docOverflow;
+      } else {
+          div.parentNode.removeChild(div);
+      }
+
+      return !!ret;
+
+    },
+    /*>>teststyles*/
+
+    /*>>mq*/
+    // adapted from matchMedia polyfill
+    // by Scott Jehl and Paul Irish
+    // gist.github.com/786768
+    testMediaQuery = function( mq ) {
+
+      var matchMedia = window.matchMedia || window.msMatchMedia;
+      if ( matchMedia ) {
+        return matchMedia(mq) && matchMedia(mq).matches || false;
+      }
+
+      var bool;
+
+      injectElementWithStyles('@media ' + mq + ' { #' + mod + ' { position: absolute; } }', function( node ) {
+        bool = (window.getComputedStyle ?
+                  getComputedStyle(node, null) :
+                  node.currentStyle)['position'] == 'absolute';
+      });
+
+      return bool;
+
+     },
+     /*>>mq*/
+
+
+    /*>>hasevent*/
+    //
+    // isEventSupported determines if a given element supports the given event
+    // kangax.github.com/iseventsupported/
+    //
+    // The following results are known incorrects:
+    //   Modernizr.hasEvent("webkitTransitionEnd", elem) // false negative
+    //   Modernizr.hasEvent("textInput") // in Webkit. github.com/Modernizr/Modernizr/issues/333
+    //   ...
+    isEventSupported = (function() {
+
+      var TAGNAMES = {
+        'select': 'input', 'change': 'input',
+        'submit': 'form', 'reset': 'form',
+        'error': 'img', 'load': 'img', 'abort': 'img'
+      };
+
+      function isEventSupported( eventName, element ) {
+
+        element = element || document.createElement(TAGNAMES[eventName] || 'div');
+        eventName = 'on' + eventName;
+
+        // When using `setAttribute`, IE skips "unload", WebKit skips "unload" and "resize", whereas `in` "catches" those
+        var isSupported = eventName in element;
+
+        if ( !isSupported ) {
+          // If it has no `setAttribute` (i.e. doesn't implement Node interface), try generic element
+          if ( !element.setAttribute ) {
+            element = document.createElement('div');
+          }
+          if ( element.setAttribute && element.removeAttribute ) {
+            element.setAttribute(eventName, '');
+            isSupported = is(element[eventName], 'function');
+
+            // If property was created, "remove it" (by setting value to `undefined`)
+            if ( !is(element[eventName], 'undefined') ) {
+              element[eventName] = undefined;
+            }
+            element.removeAttribute(eventName);
+          }
+        }
+
+        element = null;
+        return isSupported;
+      }
+      return isEventSupported;
+    })(),
+    /*>>hasevent*/
+
+    // TODO :: Add flag for hasownprop ? didn't last time
+
+    // hasOwnProperty shim by kangax needed for Safari 2.0 support
+    _hasOwnProperty = ({}).hasOwnProperty, hasOwnProp;
+
+    if ( !is(_hasOwnProperty, 'undefined') && !is(_hasOwnProperty.call, 'undefined') ) {
+      hasOwnProp = function (object, property) {
+        return _hasOwnProperty.call(object, property);
+      };
+    }
+    else {
+      hasOwnProp = function (object, property) { /* yes, this can give false positives/negatives, but most of the time we don't care about those */
+        return ((property in object) && is(object.constructor.prototype[property], 'undefined'));
+      };
+    }
+
+    // Adapted from ES5-shim https://github.com/kriskowal/es5-shim/blob/master/es5-shim.js
+    // es5.github.com/#x15.3.4.5
+
+    if (!Function.prototype.bind) {
+      Function.prototype.bind = function bind(that) {
+
+        var target = this;
+
+        if (typeof target != "function") {
+            throw new TypeError();
+        }
+
+        var args = slice.call(arguments, 1),
+            bound = function () {
+
+            if (this instanceof bound) {
+
+              var F = function(){};
+              F.prototype = target.prototype;
+              var self = new F();
+
+              var result = target.apply(
+                  self,
+                  args.concat(slice.call(arguments))
+              );
+              if (Object(result) === result) {
+                  return result;
+              }
+              return self;
+
+            } else {
+
+              return target.apply(
+                  that,
+                  args.concat(slice.call(arguments))
+              );
+
+            }
+
+        };
+
+        return bound;
+      };
+    }
+
+    /**
+     * setCss applies given styles to the Modernizr DOM node.
+     */
+    function setCss( str ) {
+        mStyle.cssText = str;
+    }
+
+    /**
+     * setCssAll extrapolates all vendor-specific css strings.
+     */
+    function setCssAll( str1, str2 ) {
+        return setCss(prefixes.join(str1 + ';') + ( str2 || '' ));
+    }
+
+    /**
+     * is returns a boolean for if typeof obj is exactly type.
+     */
+    function is( obj, type ) {
+        return typeof obj === type;
+    }
+
+    /**
+     * contains returns a boolean for if substr is found within str.
+     */
+    function contains( str, substr ) {
+        return !!~('' + str).indexOf(substr);
+    }
+
+    /*>>testprop*/
+
+    // testProps is a generic CSS / DOM property test.
+
+    // In testing support for a given CSS property, it's legit to test:
+    //    `elem.style[styleName] !== undefined`
+    // If the property is supported it will return an empty string,
+    // if unsupported it will return undefined.
+
+    // We'll take advantage of this quick test and skip setting a style
+    // on our modernizr element, but instead just testing undefined vs
+    // empty string.
+
+    // Because the testing of the CSS property names (with "-", as
+    // opposed to the camelCase DOM properties) is non-portable and
+    // non-standard but works in WebKit and IE (but not Gecko or Opera),
+    // we explicitly reject properties with dashes so that authors
+    // developing in WebKit or IE first don't end up with
+    // browser-specific content by accident.
+
+    function testProps( props, prefixed ) {
+        for ( var i in props ) {
+            var prop = props[i];
+            if ( !contains(prop, "-") && mStyle[prop] !== undefined ) {
+                return prefixed == 'pfx' ? prop : true;
+            }
+        }
+        return false;
+    }
+    /*>>testprop*/
+
+    // TODO :: add testDOMProps
+    /**
+     * testDOMProps is a generic DOM property test; if a browser supports
+     *   a certain property, it won't return undefined for it.
+     */
+    function testDOMProps( props, obj, elem ) {
+        for ( var i in props ) {
+            var item = obj[props[i]];
+            if ( item !== undefined) {
+
+                // return the property name as a string
+                if (elem === false) return props[i];
+
+                // let's bind a function
+                if (is(item, 'function')){
+                  // default to autobind unless override
+                  return item.bind(elem || obj);
+                }
+
+                // return the unbound function or obj or value
+                return item;
+            }
+        }
+        return false;
+    }
+
+    /*>>testallprops*/
+    /**
+     * testPropsAll tests a list of DOM properties we want to check against.
+     *   We specify literally ALL possible (known and/or likely) properties on
+     *   the element including the non-vendor prefixed one, for forward-
+     *   compatibility.
+     */
+    function testPropsAll( prop, prefixed, elem ) {
+
+        var ucProp  = prop.charAt(0).toUpperCase() + prop.slice(1),
+            props   = (prop + ' ' + cssomPrefixes.join(ucProp + ' ') + ucProp).split(' ');
+
+        // did they call .prefixed('boxSizing') or are we just testing a prop?
+        if(is(prefixed, "string") || is(prefixed, "undefined")) {
+          return testProps(props, prefixed);
+
+        // otherwise, they called .prefixed('requestAnimationFrame', window[, elem])
+        } else {
+          props = (prop + ' ' + (domPrefixes).join(ucProp + ' ') + ucProp).split(' ');
+          return testDOMProps(props, prefixed, elem);
+        }
+    }
+    /*>>testallprops*/
+
+
+    /**
+     * Tests
+     * -----
+     */
+
+    // The *new* flexbox
+    // dev.w3.org/csswg/css3-flexbox
+
+    tests['flexbox'] = function() {
+      return testPropsAll('flexWrap');
+    };
+
+    // The *old* flexbox
+    // www.w3.org/TR/2009/WD-css3-flexbox-20090723/
+
+    tests['flexboxlegacy'] = function() {
+        return testPropsAll('boxDirection');
+    };
+
+    // On the S60 and BB Storm, getContext exists, but always returns undefined
+    // so we actually have to call getContext() to verify
+    // github.com/Modernizr/Modernizr/issues/issue/97/
+
+    tests['canvas'] = function() {
+        var elem = document.createElement('canvas');
+        return !!(elem.getContext && elem.getContext('2d'));
+    };
+
+    tests['canvastext'] = function() {
+        return !!(Modernizr['canvas'] && is(document.createElement('canvas').getContext('2d').fillText, 'function'));
+    };
+
+    // webk.it/70117 is tracking a legit WebGL feature detect proposal
+
+    // We do a soft detect which may false positive in order to avoid
+    // an expensive context creation: bugzil.la/732441
+
+    tests['webgl'] = function() {
+        return !!window.WebGLRenderingContext;
+    };
+
+    /*
+     * The Modernizr.touch test only indicates if the browser supports
+     *    touch events, which does not necessarily reflect a touchscreen
+     *    device, as evidenced by tablets running Windows 7 or, alas,
+     *    the Palm Pre / WebOS (touch) phones.
+     *
+     * Additionally, Chrome (desktop) used to lie about its support on this,
+     *    but that has since been rectified: crbug.com/36415
+     *
+     * We also test for Firefox 4 Multitouch Support.
+     *
+     * For more info, see: modernizr.github.com/Modernizr/touch.html
+     */
+
+    tests['touch'] = function() {
+        var bool;
+
+        if(('ontouchstart' in window) || window.DocumentTouch && document instanceof DocumentTouch) {
+          bool = true;
+        } else {
+          injectElementWithStyles(['@media (',prefixes.join('touch-enabled),('),mod,')','{#modernizr{top:9px;position:absolute}}'].join(''), function( node ) {
+            bool = node.offsetTop === 9;
+          });
+        }
+
+        return bool;
+    };
+
+
+    // geolocation is often considered a trivial feature detect...
+    // Turns out, it's quite tricky to get right:
+    //
+    // Using !!navigator.geolocation does two things we don't want. It:
+    //   1. Leaks memory in IE9: github.com/Modernizr/Modernizr/issues/513
+    //   2. Disables page caching in WebKit: webk.it/43956
+    //
+    // Meanwhile, in Firefox < 8, an about:config setting could expose
+    // a false positive that would throw an exception: bugzil.la/688158
+
+    tests['geolocation'] = function() {
+        return 'geolocation' in navigator;
+    };
+
+
+    tests['postmessage'] = function() {
+      return !!window.postMessage;
+    };
+
+
+    // Chrome incognito mode used to throw an exception when using openDatabase
+    // It doesn't anymore.
+    tests['websqldatabase'] = function() {
+      return !!window.openDatabase;
+    };
+
+    // Vendors had inconsistent prefixing with the experimental Indexed DB:
+    // - Webkit's implementation is accessible through webkitIndexedDB
+    // - Firefox shipped moz_indexedDB before FF4b9, but since then has been mozIndexedDB
+    // For speed, we don't test the legacy (and beta-only) indexedDB
+    tests['indexedDB'] = function() {
+      return !!testPropsAll("indexedDB", window);
+    };
+
+    // documentMode logic from YUI to filter out IE8 Compat Mode
+    //   which false positives.
+    tests['hashchange'] = function() {
+      return isEventSupported('hashchange', window) && (document.documentMode === undefined || document.documentMode > 7);
+    };
+
+    // Per 1.6:
+    // This used to be Modernizr.historymanagement but the longer
+    // name has been deprecated in favor of a shorter and property-matching one.
+    // The old API is still available in 1.6, but as of 2.0 will throw a warning,
+    // and in the first release thereafter disappear entirely.
+    tests['history'] = function() {
+      return !!(window.history && history.pushState);
+    };
+
+    tests['draganddrop'] = function() {
+        var div = document.createElement('div');
+        return ('draggable' in div) || ('ondragstart' in div && 'ondrop' in div);
+    };
+
+    // FF3.6 was EOL'ed on 4/24/12, but the ESR version of FF10
+    // will be supported until FF19 (2/12/13), at which time, ESR becomes FF17.
+    // FF10 still uses prefixes, so check for it until then.
+    // for more ESR info, see: mozilla.org/en-US/firefox/organizations/faq/
+    tests['websockets'] = function() {
+        return 'WebSocket' in window || 'MozWebSocket' in window;
+    };
+
+
+    // css-tricks.com/rgba-browser-support/
+    tests['rgba'] = function() {
+        // Set an rgba() color and check the returned value
+
+        setCss('background-color:rgba(150,255,150,.5)');
+
+        return contains(mStyle.backgroundColor, 'rgba');
+    };
+
+    tests['hsla'] = function() {
+        // Same as rgba(), in fact, browsers re-map hsla() to rgba() internally,
+        //   except IE9 who retains it as hsla
+
+        setCss('background-color:hsla(120,40%,100%,.5)');
+
+        return contains(mStyle.backgroundColor, 'rgba') || contains(mStyle.backgroundColor, 'hsla');
+    };
+
+    tests['multiplebgs'] = function() {
+        // Setting multiple images AND a color on the background shorthand property
+        //  and then querying the style.background property value for the number of
+        //  occurrences of "url(" is a reliable method for detecting ACTUAL support for this!
+
+        setCss('background:url(https://),url(https://),red url(https://)');
+
+        // If the UA supports multiple backgrounds, there should be three occurrences
+        //   of the string "url(" in the return value for elemStyle.background
+
+        return (/(url\s*\(.*?){3}/).test(mStyle.background);
+    };
+
+
+
+    // this will false positive in Opera Mini
+    //   github.com/Modernizr/Modernizr/issues/396
+
+    tests['backgroundsize'] = function() {
+        return testPropsAll('backgroundSize');
+    };
+
+    tests['borderimage'] = function() {
+        return testPropsAll('borderImage');
+    };
+
+
+    // Super comprehensive table about all the unique implementations of
+    // border-radius: muddledramblings.com/table-of-css3-border-radius-compliance
+
+    tests['borderradius'] = function() {
+        return testPropsAll('borderRadius');
+    };
+
+    // WebOS unfortunately false positives on this test.
+    tests['boxshadow'] = function() {
+        return testPropsAll('boxShadow');
+    };
+
+    // FF3.0 will false positive on this test
+    tests['textshadow'] = function() {
+        return document.createElement('div').style.textShadow === '';
+    };
+
+
+    tests['opacity'] = function() {
+        // Browsers that actually have CSS Opacity implemented have done so
+        //  according to spec, which means their return values are within the
+        //  range of [0.0,1.0] - including the leading zero.
+
+        setCssAll('opacity:.55');
+
+        // The non-literal . in this regex is intentional:
+        //   German Chrome returns this value as 0,55
+        // github.com/Modernizr/Modernizr/issues/#issue/59/comment/516632
+        return (/^0.55$/).test(mStyle.opacity);
+    };
+
+
+    // Note, Android < 4 will pass this test, but can only animate
+    //   a single property at a time
+    //   goo.gl/v3V4Gp
+    tests['cssanimations'] = function() {
+        return testPropsAll('animationName');
+    };
+
+
+    tests['csscolumns'] = function() {
+        return testPropsAll('columnCount');
+    };
+
+
+    tests['cssgradients'] = function() {
+        /**
+         * For CSS Gradients syntax, please see:
+         * webkit.org/blog/175/introducing-css-gradients/
+         * developer.mozilla.org/en/CSS/-moz-linear-gradient
+         * developer.mozilla.org/en/CSS/-moz-radial-gradient
+         * dev.w3.org/csswg/css3-images/#gradients-
+         */
+
+        var str1 = 'background-image:',
+            str2 = 'gradient(linear,left top,right bottom,from(#9f9),to(white));',
+            str3 = 'linear-gradient(left top,#9f9, white);';
+
+        setCss(
+             // legacy webkit syntax (FIXME: remove when syntax not in use anymore)
+              (str1 + '-webkit- '.split(' ').join(str2 + str1) +
+             // standard syntax             // trailing 'background-image:'
+              prefixes.join(str3 + str1)).slice(0, -str1.length)
+        );
+
+        return contains(mStyle.backgroundImage, 'gradient');
+    };
+
+
+    tests['cssreflections'] = function() {
+        return testPropsAll('boxReflect');
+    };
+
+
+    tests['csstransforms'] = function() {
+        return !!testPropsAll('transform');
+    };
+
+
+    tests['csstransforms3d'] = function() {
+
+        var ret = !!testPropsAll('perspective');
+
+        // Webkit's 3D transforms are passed off to the browser's own graphics renderer.
+        //   It works fine in Safari on Leopard and Snow Leopard, but not in Chrome in
+        //   some conditions. As a result, Webkit typically recognizes the syntax but
+        //   will sometimes throw a false positive, thus we must do a more thorough check:
+        if ( ret && 'webkitPerspective' in docElement.style ) {
+
+          // Webkit allows this media query to succeed only if the feature is enabled.
+          // `@media (transform-3d),(-webkit-transform-3d){ ... }`
+          injectElementWithStyles('@media (transform-3d),(-webkit-transform-3d){#modernizr{left:9px;position:absolute;height:3px;}}', function( node, rule ) {
+            ret = node.offsetLeft === 9 && node.offsetHeight === 3;
+          });
+        }
+        return ret;
+    };
+
+
+    tests['csstransitions'] = function() {
+        return testPropsAll('transition');
+    };
+
+
+    /*>>fontface*/
+    // @font-face detection routine by Diego Perini
+    // javascript.nwbox.com/CSSSupport/
+
+    // false positives:
+    //   WebOS github.com/Modernizr/Modernizr/issues/342
+    //   WP7   github.com/Modernizr/Modernizr/issues/538
+    tests['fontface'] = function() {
+        var bool;
+
+        injectElementWithStyles('@font-face {font-family:"font";src:url("https://")}', function( node, rule ) {
+          var style = document.getElementById('smodernizr'),
+              sheet = style.sheet || style.styleSheet,
+              cssText = sheet ? (sheet.cssRules && sheet.cssRules[0] ? sheet.cssRules[0].cssText : sheet.cssText || '') : '';
+
+          bool = /src/i.test(cssText) && cssText.indexOf(rule.split(' ')[0]) === 0;
+        });
+
+        return bool;
+    };
+    /*>>fontface*/
+
+    // CSS generated content detection
+    tests['generatedcontent'] = function() {
+        var bool;
+
+        injectElementWithStyles(['#',mod,'{font:0/0 a}#',mod,':after{content:"',smile,'";visibility:hidden;font:3px/1 a}'].join(''), function( node ) {
+          bool = node.offsetHeight >= 3;
+        });
+
+        return bool;
+    };
+
+
+
+    // These tests evaluate support of the video/audio elements, as well as
+    // testing what types of content they support.
+    //
+    // We're using the Boolean constructor here, so that we can extend the value
+    // e.g.  Modernizr.video     // true
+    //       Modernizr.video.ogg // 'probably'
+    //
+    // Codec values from : github.com/NielsLeenheer/html5test/blob/9106a8/index.html#L845
+    //                     thx to NielsLeenheer and zcorpan
+
+    // Note: in some older browsers, "no" was a return value instead of empty string.
+    //   It was live in FF3.5.0 and 3.5.1, but fixed in 3.5.2
+    //   It was also live in Safari 4.0.0 - 4.0.4, but fixed in 4.0.5
+
+    tests['video'] = function() {
+        var elem = document.createElement('video'),
+            bool = false;
+
+        // IE9 Running on Windows Server SKU can cause an exception to be thrown, bug #224
+        try {
+            if ( bool = !!elem.canPlayType ) {
+                bool      = new Boolean(bool);
+                bool.ogg  = elem.canPlayType('video/ogg; codecs="theora"')      .replace(/^no$/,'');
+
+                // Without QuickTime, this value will be `undefined`. github.com/Modernizr/Modernizr/issues/546
+                bool.h264 = elem.canPlayType('video/mp4; codecs="avc1.42E01E"') .replace(/^no$/,'');
+
+                bool.webm = elem.canPlayType('video/webm; codecs="vp8, vorbis"').replace(/^no$/,'');
+            }
+
+        } catch(e) { }
+
+        return bool;
+    };
+
+    tests['audio'] = function() {
+        var elem = document.createElement('audio'),
+            bool = false;
+
+        try {
+            if ( bool = !!elem.canPlayType ) {
+                bool      = new Boolean(bool);
+                bool.ogg  = elem.canPlayType('audio/ogg; codecs="vorbis"').replace(/^no$/,'');
+                bool.mp3  = elem.canPlayType('audio/mpeg;')               .replace(/^no$/,'');
+
+                // Mimetypes accepted:
+                //   developer.mozilla.org/En/Media_formats_supported_by_the_audio_and_video_elements
+                //   bit.ly/iphoneoscodecs
+                bool.wav  = elem.canPlayType('audio/wav; codecs="1"')     .replace(/^no$/,'');
+                bool.m4a  = ( elem.canPlayType('audio/x-m4a;')            ||
+                              elem.canPlayType('audio/aac;'))             .replace(/^no$/,'');
+            }
+        } catch(e) { }
+
+        return bool;
+    };
+
+
+    // In FF4, if disabled, window.localStorage should === null.
+
+    // Normally, we could not test that directly and need to do a
+    //   `('localStorage' in window) && ` test first because otherwise Firefox will
+    //   throw bugzil.la/365772 if cookies are disabled
+
+    // Also in iOS5 Private Browsing mode, attempting to use localStorage.setItem
+    // will throw the exception:
+    //   QUOTA_EXCEEDED_ERRROR DOM Exception 22.
+    // Peculiarly, getItem and removeItem calls do not throw.
+
+    // Because we are forced to try/catch this, we'll go aggressive.
+
+    // Just FWIW: IE8 Compat mode supports these features completely:
+    //   www.quirksmode.org/dom/html5.html
+    // But IE8 doesn't support either with local files
+
+    tests['localstorage'] = function() {
+        try {
+            localStorage.setItem(mod, mod);
+            localStorage.removeItem(mod);
+            return true;
+        } catch(e) {
+            return false;
+        }
+    };
+
+    tests['sessionstorage'] = function() {
+        try {
+            sessionStorage.setItem(mod, mod);
+            sessionStorage.removeItem(mod);
+            return true;
+        } catch(e) {
+            return false;
+        }
+    };
+
+
+    tests['webworkers'] = function() {
+        return !!window.Worker;
+    };
+
+
+    tests['applicationcache'] = function() {
+        return !!window.applicationCache;
+    };
+
+
+    // Thanks to Erik Dahlstrom
+    tests['svg'] = function() {
+        return !!document.createElementNS && !!document.createElementNS(ns.svg, 'svg').createSVGRect;
+    };
+
+    // specifically for SVG inline in HTML, not within XHTML
+    // test page: paulirish.com/demo/inline-svg
+    tests['inlinesvg'] = function() {
+      var div = document.createElement('div');
+      div.innerHTML = '<svg/>';
+      return (div.firstChild && div.firstChild.namespaceURI) == ns.svg;
+    };
+
+    // SVG SMIL animation
+    tests['smil'] = function() {
+        return !!document.createElementNS && /SVGAnimate/.test(toString.call(document.createElementNS(ns.svg, 'animate')));
+    };
+
+    // This test is only for clip paths in SVG proper, not clip paths on HTML content
+    // demo: srufaculty.sru.edu/david.dailey/svg/newstuff/clipPath4.svg
+
+    // However read the comments to dig into applying SVG clippaths to HTML content here:
+    //   github.com/Modernizr/Modernizr/issues/213#issuecomment-1149491
+    tests['svgclippaths'] = function() {
+        return !!document.createElementNS && /SVGClipPath/.test(toString.call(document.createElementNS(ns.svg, 'clipPath')));
+    };
+
+    /*>>webforms*/
+    // input features and input types go directly onto the ret object, bypassing the tests loop.
+    // Hold this guy to execute in a moment.
+    function webforms() {
+        /*>>input*/
+        // Run through HTML5's new input attributes to see if the UA understands any.
+        // We're using f which is the <input> element created early on
+        // Mike Taylr has created a comprehensive resource for testing these attributes
+        //   when applied to all input types:
+        //   miketaylr.com/code/input-type-attr.html
+        // spec: www.whatwg.org/specs/web-apps/current-work/multipage/the-input-element.html#input-type-attr-summary
+
+        // Only input placeholder is tested while textarea's placeholder is not.
+        // Currently Safari 4 and Opera 11 have support only for the input placeholder
+        // Both tests are available in feature-detects/forms-placeholder.js
+        Modernizr['input'] = (function( props ) {
+            for ( var i = 0, len = props.length; i < len; i++ ) {
+                attrs[ props[i] ] = !!(props[i] in inputElem);
+            }
+            if (attrs.list){
+              // safari false positive's on datalist: webk.it/74252
+              // see also github.com/Modernizr/Modernizr/issues/146
+              attrs.list = !!(document.createElement('datalist') && window.HTMLDataListElement);
+            }
+            return attrs;
+        })('autocomplete autofocus list placeholder max min multiple pattern required step'.split(' '));
+        /*>>input*/
+
+        /*>>inputtypes*/
+        // Run through HTML5's new input types to see if the UA understands any.
+        //   This is put behind the tests runloop because it doesn't return a
+        //   true/false like all the other tests; instead, it returns an object
+        //   containing each input type with its corresponding true/false value
+
+        // Big thanks to @miketaylr for the html5 forms expertise. miketaylr.com/
+        Modernizr['inputtypes'] = (function(props) {
+
+            for ( var i = 0, bool, inputElemType, defaultView, len = props.length; i < len; i++ ) {
+
+                inputElem.setAttribute('type', inputElemType = props[i]);
+                bool = inputElem.type !== 'text';
+
+                // We first check to see if the type we give it sticks..
+                // If the type does, we feed it a textual value, which shouldn't be valid.
+                // If the value doesn't stick, we know there's input sanitization which infers a custom UI
+                if ( bool ) {
+
+                    inputElem.value         = smile;
+                    inputElem.style.cssText = 'position:absolute;visibility:hidden;';
+
+                    if ( /^range$/.test(inputElemType) && inputElem.style.WebkitAppearance !== undefined ) {
+
+                      docElement.appendChild(inputElem);
+                      defaultView = document.defaultView;
+
+                      // Safari 2-4 allows the smiley as a value, despite making a slider
+                      bool =  defaultView.getComputedStyle &&
+                              defaultView.getComputedStyle(inputElem, null).WebkitAppearance !== 'textfield' &&
+                              // Mobile android web browser has false positive, so must
+                              // check the height to see if the widget is actually there.
+                              (inputElem.offsetHeight !== 0);
+
+                      docElement.removeChild(inputElem);
+
+                    } else if ( /^(search|tel)$/.test(inputElemType) ){
+                      // Spec doesn't define any special parsing or detectable UI
+                      //   behaviors so we pass these through as true
+
+                      // Interestingly, opera fails the earlier test, so it doesn't
+                      //  even make it here.
+
+                    } else if ( /^(url|email)$/.test(inputElemType) ) {
+                      // Real url and email support comes with prebaked validation.
+                      bool = inputElem.checkValidity && inputElem.checkValidity() === false;
+
+                    } else {
+                      // If the upgraded input compontent rejects the :) text, we got a winner
+                      bool = inputElem.value != smile;
+                    }
+                }
+
+                inputs[ props[i] ] = !!bool;
+            }
+            return inputs;
+        })('search tel url email datetime date month week time datetime-local number range color'.split(' '));
+        /*>>inputtypes*/
+    }
+    /*>>webforms*/
+
+
+    // End of test definitions
+    // -----------------------
+
+
+
+    // Run through all tests and detect their support in the current UA.
+    // todo: hypothetically we could be doing an array of tests and use a basic loop here.
+    for ( var feature in tests ) {
+        if ( hasOwnProp(tests, feature) ) {
+            // run the test, throw the return value into the Modernizr,
+            //   then based on that boolean, define an appropriate className
+            //   and push it into an array of classes we'll join later.
+            featureName  = feature.toLowerCase();
+            Modernizr[featureName] = tests[feature]();
+
+            classes.push((Modernizr[featureName] ? '' : 'no-') + featureName);
+        }
+    }
+
+    /*>>webforms*/
+    // input tests need to run.
+    Modernizr.input || webforms();
+    /*>>webforms*/
+
+
+    /**
+     * addTest allows the user to define their own feature tests
+     * the result will be added onto the Modernizr object,
+     * as well as an appropriate className set on the html element
+     *
+     * @param feature - String naming the feature
+     * @param test - Function returning true if feature is supported, false if not
+     */
+     Modernizr.addTest = function ( feature, test ) {
+       if ( typeof feature == 'object' ) {
+         for ( var key in feature ) {
+           if ( hasOwnProp( feature, key ) ) {
+             Modernizr.addTest( key, feature[ key ] );
+           }
+         }
+       } else {
+
+         feature = feature.toLowerCase();
+
+         if ( Modernizr[feature] !== undefined ) {
+           // we're going to quit if you're trying to overwrite an existing test
+           // if we were to allow it, we'd do this:
+           //   var re = new RegExp("\\b(no-)?" + feature + "\\b");
+           //   docElement.className = docElement.className.replace( re, '' );
+           // but, no rly, stuff 'em.
+           return Modernizr;
+         }
+
+         test = typeof test == 'function' ? test() : test;
+
+         if (typeof enableClasses !== "undefined" && enableClasses) {
+           docElement.className += ' ' + (test ? '' : 'no-') + feature;
+         }
+         Modernizr[feature] = test;
+
+       }
+
+       return Modernizr; // allow chaining.
+     };
+
+
+    // Reset modElem.cssText to nothing to reduce memory footprint.
+    setCss('');
+    modElem = inputElem = null;
+
+    /*>>shiv*/
+    /**
+     * @preserve HTML5 Shiv prev3.7.1 | @afarkas @jdalton @jon_neal @rem | MIT/GPL2 Licensed
+     */
+    ;(function(window, document) {
+        /*jshint evil:true */
+        /** version */
+        var version = '3.7.0';
+
+        /** Preset options */
+        var options = window.html5 || {};
+
+        /** Used to skip problem elements */
+        var reSkip = /^<|^(?:button|map|select|textarea|object|iframe|option|optgroup)$/i;
+
+        /** Not all elements can be cloned in IE **/
+        var saveClones = /^(?:a|b|code|div|fieldset|h1|h2|h3|h4|h5|h6|i|label|li|ol|p|q|span|strong|style|table|tbody|td|th|tr|ul)$/i;
+
+        /** Detect whether the browser supports default html5 styles */
+        var supportsHtml5Styles;
+
+        /** Name of the expando, to work with multiple documents or to re-shiv one document */
+        var expando = '_html5shiv';
+
+        /** The id for the the documents expando */
+        var expanID = 0;
+
+        /** Cached data for each document */
+        var expandoData = {};
+
+        /** Detect whether the browser supports unknown elements */
+        var supportsUnknownElements;
+
+        (function() {
+          try {
+            var a = document.createElement('a');
+            a.innerHTML = '<xyz></xyz>';
+            //if the hidden property is implemented we can assume, that the browser supports basic HTML5 Styles
+            supportsHtml5Styles = ('hidden' in a);
+
+            supportsUnknownElements = a.childNodes.length == 1 || (function() {
+              // assign a false positive if unable to shiv
+              (document.createElement)('a');
+              var frag = document.createDocumentFragment();
+              return (
+                typeof frag.cloneNode == 'undefined' ||
+                typeof frag.createDocumentFragment == 'undefined' ||
+                typeof frag.createElement == 'undefined'
+              );
+            }());
+          } catch(e) {
+            // assign a false positive if detection fails => unable to shiv
+            supportsHtml5Styles = true;
+            supportsUnknownElements = true;
+          }
+
+        }());
+
+        /*--------------------------------------------------------------------------*/
+
+        /**
+         * Creates a style sheet with the given CSS text and adds it to the document.
+         * @private
+         * @param {Document} ownerDocument The document.
+         * @param {String} cssText The CSS text.
+         * @returns {StyleSheet} The style element.
+         */
+        function addStyleSheet(ownerDocument, cssText) {
+          var p = ownerDocument.createElement('p'),
+          parent = ownerDocument.getElementsByTagName('head')[0] || ownerDocument.documentElement;
+
+          p.innerHTML = 'x<style>' + cssText + '</style>';
+          return parent.insertBefore(p.lastChild, parent.firstChild);
+        }
+
+        /**
+         * Returns the value of `html5.elements` as an array.
+         * @private
+         * @returns {Array} An array of shived element node names.
+         */
+        function getElements() {
+          var elements = html5.elements;
+          return typeof elements == 'string' ? elements.split(' ') : elements;
+        }
+
+        /**
+         * Returns the data associated to the given document
+         * @private
+         * @param {Document} ownerDocument The document.
+         * @returns {Object} An object of data.
+         */
+        function getExpandoData(ownerDocument) {
+          var data = expandoData[ownerDocument[expando]];
+          if (!data) {
+            data = {};
+            expanID++;
+            ownerDocument[expando] = expanID;
+            expandoData[expanID] = data;
+          }
+          return data;
+        }
+
+        /**
+         * returns a shived element for the given nodeName and document
+         * @memberOf html5
+         * @param {String} nodeName name of the element
+         * @param {Document} ownerDocument The context document.
+         * @returns {Object} The shived element.
+         */
+        function createElement(nodeName, ownerDocument, data){
+          if (!ownerDocument) {
+            ownerDocument = document;
+          }
+          if(supportsUnknownElements){
+            return ownerDocument.createElement(nodeName);
+          }
+          if (!data) {
+            data = getExpandoData(ownerDocument);
+          }
+          var node;
+
+          if (data.cache[nodeName]) {
+            node = data.cache[nodeName].cloneNode();
+          } else if (saveClones.test(nodeName)) {
+            node = (data.cache[nodeName] = data.createElem(nodeName)).cloneNode();
+          } else {
+            node = data.createElem(nodeName);
+          }
+
+          // Avoid adding some elements to fragments in IE < 9 because
+          // * Attributes like `name` or `type` cannot be set/changed once an element
+          //   is inserted into a document/fragment
+          // * Link elements with `src` attributes that are inaccessible, as with
+          //   a 403 response, will cause the tab/window to crash
+          // * Script elements appended to fragments will execute when their `src`
+          //   or `text` property is set
+          return node.canHaveChildren && !reSkip.test(nodeName) && !node.tagUrn ? data.frag.appendChild(node) : node;
+        }
+
+        /**
+         * returns a shived DocumentFragment for the given document
+         * @memberOf html5
+         * @param {Document} ownerDocument The context document.
+         * @returns {Object} The shived DocumentFragment.
+         */
+        function createDocumentFragment(ownerDocument, data){
+          if (!ownerDocument) {
+            ownerDocument = document;
+          }
+          if(supportsUnknownElements){
+            return ownerDocument.createDocumentFragment();
+          }
+          data = data || getExpandoData(ownerDocument);
+          var clone = data.frag.cloneNode(),
+          i = 0,
+          elems = getElements(),
+          l = elems.length;
+          for(;i<l;i++){
+            clone.createElement(elems[i]);
+          }
+          return clone;
+        }
+
+        /**
+         * Shivs the `createElement` and `createDocumentFragment` methods of the document.
+         * @private
+         * @param {Document|DocumentFragment} ownerDocument The document.
+         * @param {Object} data of the document.
+         */
+        function shivMethods(ownerDocument, data) {
+          if (!data.cache) {
+            data.cache = {};
+            data.createElem = ownerDocument.createElement;
+            data.createFrag = ownerDocument.createDocumentFragment;
+            data.frag = data.createFrag();
+          }
+
+
+          ownerDocument.createElement = function(nodeName) {
+            //abort shiv
+            if (!html5.shivMethods) {
+              return data.createElem(nodeName);
+            }
+            return createElement(nodeName, ownerDocument, data);
+          };
+
+          ownerDocument.createDocumentFragment = Function('h,f', 'return function(){' +
+                                                          'var n=f.cloneNode(),c=n.createElement;' +
+                                                          'h.shivMethods&&(' +
+                                                          // unroll the `createElement` calls
+                                                          getElements().join().replace(/[\w\-]+/g, function(nodeName) {
+            data.createElem(nodeName);
+            data.frag.createElement(nodeName);
+            return 'c("' + nodeName + '")';
+          }) +
+            ');return n}'
+                                                         )(html5, data.frag);
+        }
+
+        /*--------------------------------------------------------------------------*/
+
+        /**
+         * Shivs the given document.
+         * @memberOf html5
+         * @param {Document} ownerDocument The document to shiv.
+         * @returns {Document} The shived document.
+         */
+        function shivDocument(ownerDocument) {
+          if (!ownerDocument) {
+            ownerDocument = document;
+          }
+          var data = getExpandoData(ownerDocument);
+
+          if (html5.shivCSS && !supportsHtml5Styles && !data.hasCSS) {
+            data.hasCSS = !!addStyleSheet(ownerDocument,
+                                          // corrects block display not defined in IE6/7/8/9
+                                          'article,aside,dialog,figcaption,figure,footer,header,hgroup,main,nav,section{display:block}' +
+                                            // adds styling not present in IE6/7/8/9
+                                            'mark{background:#FF0;color:#000}' +
+                                            // hides non-rendered elements
+                                            'template{display:none}'
+                                         );
+          }
+          if (!supportsUnknownElements) {
+            shivMethods(ownerDocument, data);
+          }
+          return ownerDocument;
+        }
+
+        /*--------------------------------------------------------------------------*/
+
+        /**
+         * The `html5` object is exposed so that more elements can be shived and
+         * existing shiving can be detected on iframes.
+         * @type Object
+         * @example
+         *
+         * // options can be changed before the script is included
+         * html5 = { 'elements': 'mark section', 'shivCSS': false, 'shivMethods': false };
+         */
+        var html5 = {
+
+          /**
+           * An array or space separated string of node names of the elements to shiv.
+           * @memberOf html5
+           * @type Array|String
+           */
+          'elements': options.elements || 'abbr article aside audio bdi canvas data datalist details dialog figcaption figure footer header hgroup main mark meter nav output progress section summary template time video',
+
+          /**
+           * current version of html5shiv
+           */
+          'version': version,
+
+          /**
+           * A flag to indicate that the HTML5 style sheet should be inserted.
+           * @memberOf html5
+           * @type Boolean
+           */
+          'shivCSS': (options.shivCSS !== false),
+
+          /**
+           * Is equal to true if a browser supports creating unknown/HTML5 elements
+           * @memberOf html5
+           * @type boolean
+           */
+          'supportsUnknownElements': supportsUnknownElements,
+
+          /**
+           * A flag to indicate that the document's `createElement` and `createDocumentFragment`
+           * methods should be overwritten.
+           * @memberOf html5
+           * @type Boolean
+           */
+          'shivMethods': (options.shivMethods !== false),
+
+          /**
+           * A string to describe the type of `html5` object ("default" or "default print").
+           * @memberOf html5
+           * @type String
+           */
+          'type': 'default',
+
+          // shivs the document according to the specified `html5` object options
+          'shivDocument': shivDocument,
+
+          //creates a shived element
+          createElement: createElement,
+
+          //creates a shived documentFragment
+          createDocumentFragment: createDocumentFragment
+        };
+
+        /*--------------------------------------------------------------------------*/
+
+        // expose html5
+        window.html5 = html5;
+
+        // shiv the document
+        shivDocument(document);
+
+    }(this, document));
+    /*>>shiv*/
+
+    // Assign private properties to the return object with prefix
+    Modernizr._version      = version;
+
+    // expose these for the plugin API. Look in the source for how to join() them against your input
+    /*>>prefixes*/
+    Modernizr._prefixes     = prefixes;
+    /*>>prefixes*/
+    /*>>domprefixes*/
+    Modernizr._domPrefixes  = domPrefixes;
+    Modernizr._cssomPrefixes  = cssomPrefixes;
+    /*>>domprefixes*/
+
+    /*>>mq*/
+    // Modernizr.mq tests a given media query, live against the current state of the window
+    // A few important notes:
+    //   * If a browser does not support media queries at all (eg. oldIE) the mq() will always return false
+    //   * A max-width or orientation query will be evaluated against the current state, which may change later.
+    //   * You must specify values. Eg. If you are testing support for the min-width media query use:
+    //       Modernizr.mq('(min-width:0)')
+    // usage:
+    // Modernizr.mq('only screen and (max-width:768)')
+    Modernizr.mq            = testMediaQuery;
+    /*>>mq*/
+
+    /*>>hasevent*/
+    // Modernizr.hasEvent() detects support for a given event, with an optional element to test on
+    // Modernizr.hasEvent('gesturestart', elem)
+    Modernizr.hasEvent      = isEventSupported;
+    /*>>hasevent*/
+
+    /*>>testprop*/
+    // Modernizr.testProp() investigates whether a given style property is recognized
+    // Note that the property names must be provided in the camelCase variant.
+    // Modernizr.testProp('pointerEvents')
+    Modernizr.testProp      = function(prop){
+        return testProps([prop]);
+    };
+    /*>>testprop*/
+
+    /*>>testallprops*/
+    // Modernizr.testAllProps() investigates whether a given style property,
+    //   or any of its vendor-prefixed variants, is recognized
+    // Note that the property names must be provided in the camelCase variant.
+    // Modernizr.testAllProps('boxSizing')
+    Modernizr.testAllProps  = testPropsAll;
+    /*>>testallprops*/
+
+
+    /*>>teststyles*/
+    // Modernizr.testStyles() allows you to add custom styles to the document and test an element afterwards
+    // Modernizr.testStyles('#modernizr { position:absolute }', function(elem, rule){ ... })
+    Modernizr.testStyles    = injectElementWithStyles;
+    /*>>teststyles*/
+
+
+    /*>>prefixed*/
+    // Modernizr.prefixed() returns the prefixed or nonprefixed property name variant of your input
+    // Modernizr.prefixed('boxSizing') // 'MozBoxSizing'
+
+    // Properties must be passed as dom-style camelcase, rather than `box-sizing` hypentated style.
+    // Return values will also be the camelCase variant, if you need to translate that to hypenated style use:
+    //
+    //     str.replace(/([A-Z])/g, function(str,m1){ return '-' + m1.toLowerCase(); }).replace(/^ms-/,'-ms-');
+
+    // If you're trying to ascertain which transition end event to bind to, you might do something like...
+    //
+    //     var transEndEventNames = {
+    //       'WebkitTransition' : 'webkitTransitionEnd',
+    //       'MozTransition'    : 'transitionend',
+    //       'OTransition'      : 'oTransitionEnd',
+    //       'msTransition'     : 'MSTransitionEnd',
+    //       'transition'       : 'transitionend'
+    //     },
+    //     transEndEventName = transEndEventNames[ Modernizr.prefixed('transition') ];
+
+    Modernizr.prefixed      = function(prop, obj, elem){
+      if(!obj) {
+        return testPropsAll(prop, 'pfx');
+      } else {
+        // Testing DOM property e.g. Modernizr.prefixed('requestAnimationFrame', window) // 'mozRequestAnimationFrame'
+        return testPropsAll(prop, obj, elem);
+      }
+    };
+    /*>>prefixed*/
+
+
+    /*>>cssclasses*/
+    // Remove "no-js" class from <html> element, if it exists:
+    docElement.className = docElement.className.replace(/(^|\s)no-js(\s|$)/, '$1$2') +
+
+                            // Add the new classes to the <html> element.
+                            (enableClasses ? ' js ' + classes.join(' ') : '');
+    /*>>cssclasses*/
+
+    return Modernizr;
+
+})(this, this.document);
+
+
+/*!
  * jQuery JavaScript Library v2.1.3
  * http://jquery.com/
  *
@@ -11522,3 +12930,7 @@ if (typeof jQuery === 'undefined') {
   })
 
 }(jQuery);
+
+
+!function(a,b,c,d){function e(b,c){b.owlCarousel={name:"Owl Carousel",author:"Bartosz Wojciechowski",version:"2.0.0-beta.2.1"},this.settings=null,this.options=a.extend({},e.Defaults,c),this.itemData=a.extend({},l),this.dom=a.extend({},m),this.width=a.extend({},n),this.num=a.extend({},o),this.drag=a.extend({},q),this.state=a.extend({},r),this.e=a.extend({},s),this.plugins={},this._supress={},this._current=null,this._speed=null,this._coordinates=null,this.dom.el=b,this.dom.$el=a(b);for(var d in e.Plugins)this.plugins[d[0].toLowerCase()+d.slice(1)]=new e.Plugins[d](this);this.init()}function f(a){var b,d,e=c.createElement("div"),f=a;for(b in f)if(d=f[b],"undefined"!=typeof e.style[d])return e=null,[d,b];return[!1]}function g(){return f(["transition","WebkitTransition","MozTransition","OTransition"])[1]}function h(){return f(["transform","WebkitTransform","MozTransform","OTransform","msTransform"])[0]}function i(){return f(["perspective","webkitPerspective","MozPerspective","OPerspective","MsPerspective"])[0]}function j(){return"ontouchstart"in b||!!navigator.msMaxTouchPoints}function k(){return b.navigator.msPointerEnabled}var l,m,n,o,p,q,r,s;l={index:!1,indexAbs:!1,posLeft:!1,clone:!1,active:!1,loaded:!1,lazyLoad:!1,current:!1,width:!1,center:!1,page:!1,hasVideo:!1,playVideo:!1},m={el:null,$el:null,stage:null,$stage:null,oStage:null,$oStage:null,$items:null,$oItems:null,$cItems:null,$content:null},n={el:0,stage:0,item:0,prevWindow:0,cloneLast:0},o={items:0,oItems:0,cItems:0,active:0,merged:[]},q={start:0,startX:0,startY:0,current:0,currentX:0,currentY:0,offsetX:0,offsetY:0,distance:null,startTime:0,endTime:0,updatedX:0,targetEl:null},r={isTouch:!1,isScrolling:!1,isSwiping:!1,direction:!1,inMotion:!1},s={_onDragStart:null,_onDragMove:null,_onDragEnd:null,_transitionEnd:null,_resizer:null,_responsiveCall:null,_goToLoop:null,_checkVisibile:null},e.Defaults={items:3,loop:!1,center:!1,mouseDrag:!0,touchDrag:!0,pullDrag:!0,freeDrag:!1,margin:0,stagePadding:0,merge:!1,mergeFit:!0,autoWidth:!1,startPosition:0,smartSpeed:250,fluidSpeed:!1,dragEndSpeed:!1,responsive:{},responsiveRefreshRate:200,responsiveBaseElement:b,responsiveClass:!1,fallbackEasing:"swing",info:!1,nestedItemSelector:!1,itemElement:"div",stageElement:"div",themeClass:"owl-theme",baseClass:"owl-carousel",itemClass:"owl-item",centerClass:"center",activeClass:"active"},e.Plugins={},e.prototype.init=function(){if(this.setResponsiveOptions(),this.trigger("initialize"),this.dom.$el.hasClass(this.settings.baseClass)||this.dom.$el.addClass(this.settings.baseClass),this.dom.$el.hasClass(this.settings.themeClass)||this.dom.$el.addClass(this.settings.themeClass),this.settings.rtl&&this.dom.$el.addClass("owl-rtl"),this.browserSupport(),this.settings.autoWidth&&this.state.imagesLoaded!==!0){var a,b,c;if(a=this.dom.$el.find("img"),b=this.settings.nestedItemSelector?"."+this.settings.nestedItemSelector:d,c=this.dom.$el.children(b).width(),a.length&&0>=c)return this.preloadAutoWidthImages(a),!1}this.width.prevWindow=this.viewport(),this.createStage(),this.fetchContent(),this.eventsCall(),this.internalEvents(),this.dom.$el.addClass("owl-loading"),this.refresh(!0),this.dom.$el.removeClass("owl-loading").addClass("owl-loaded"),this.trigger("initialized"),this.addTriggerableEvents()},e.prototype.setResponsiveOptions=function(){if(this.options.responsive){var b=this.viewport(),c=this.options.responsive,d=-1;a.each(c,function(a){b>=a&&a>d&&(d=Number(a))}),this.settings=a.extend({},this.options,c[d]),delete this.settings.responsive,this.settings.responsiveClass&&this.dom.$el.attr("class",function(a,b){return b.replace(/\b owl-responsive-\S+/g,"")}).addClass("owl-responsive-"+d)}else this.settings=a.extend({},this.options)},e.prototype.optionsLogic=function(){this.dom.$el.toggleClass("owl-center",this.settings.center),this.settings.loop&&this.num.oItems<this.settings.items&&(this.settings.loop=!1),this.settings.autoWidth&&(this.settings.stagePadding=!1,this.settings.merge=!1)},e.prototype.createStage=function(){var b=c.createElement("div"),d=c.createElement(this.settings.stageElement);b.className="owl-stage-outer",d.className="owl-stage",b.appendChild(d),this.dom.el.appendChild(b),this.dom.oStage=b,this.dom.$oStage=a(b),this.dom.stage=d,this.dom.$stage=a(d),b=null,d=null},e.prototype.createItemContainer=function(){var b=c.createElement(this.settings.itemElement);return b.className=this.settings.itemClass,a(b)},e.prototype.fetchContent=function(b){this.dom.$content=b?b instanceof jQuery?b:a(b):this.settings.nestedItemSelector?this.dom.$el.find("."+this.settings.nestedItemSelector).not(".owl-stage-outer"):this.dom.$el.children().not(".owl-stage-outer"),this.num.oItems=this.dom.$content.length,0!==this.num.oItems&&this.initStructure()},e.prototype.initStructure=function(){this.createNormalStructure()},e.prototype.createNormalStructure=function(){var a,b;for(a=0;a<this.num.oItems;a++)b=this.createItemContainer(),this.initializeItemContainer(b,this.dom.$content[a]),this.dom.$stage.append(b);this.dom.$content=null},e.prototype.createCustomStructure=function(a){var b,c;for(b=0;a>b;b++)c=this.createItemContainer(),this.createItemContainerData(c),this.dom.$stage.append(c)},e.prototype.initializeItemContainer=function(a,b){this.trigger("change",{property:{name:"item",value:a}}),this.createItemContainerData(a),a.append(b),this.trigger("changed",{property:{name:"item",value:a}})},e.prototype.createItemContainerData=function(b,c){var d=a.extend({},this.itemData);c&&a.extend(d,c.data("owl-item")),b.data("owl-item",d)},e.prototype.cloneItemContainer=function(a){var b=a.clone(!0,!0).addClass("cloned");return this.createItemContainerData(b,b),b.data("owl-item").clone=!0,b},e.prototype.updateLocalContent=function(){var b,c;for(this.dom.$oItems=this.dom.$stage.find("."+this.settings.itemClass).filter(function(){return a(this).data("owl-item").clone===!1}),this.num.oItems=this.dom.$oItems.length,b=0;b<this.num.oItems;b++)c=this.dom.$oItems.eq(b),c.data("owl-item").index=b},e.prototype.loopClone=function(){if(!this.settings.loop||this.num.oItems<this.settings.items)return!1;var b,c,d,e=this.settings.items,f=this.num.oItems-1;for(this.settings.stagePadding&&1===this.settings.items&&(e+=1),this.num.cItems=2*e,d=0;e>d;d++)b=this.cloneItemContainer(this.dom.$oItems.eq(d)),c=this.cloneItemContainer(this.dom.$oItems.eq(f-d)),this.dom.$stage.append(b),this.dom.$stage.prepend(c);this.dom.$cItems=this.dom.$stage.find("."+this.settings.itemClass).filter(function(){return a(this).data("owl-item").clone===!0})},e.prototype.reClone=function(){null!==this.dom.$cItems&&(this.dom.$cItems.remove(),this.dom.$cItems=null,this.num.cItems=0),this.settings.loop&&this.loopClone()},e.prototype.calculate=function(){var a,b,c,d,e,f,g,h=0,i=0;for(this.width.el=this.dom.$el.width()-2*this.settings.stagePadding,this.width.view=this.dom.$el.width(),c=this.width.el-this.settings.margin*(1===this.settings.items?0:this.settings.items-1),this.width.el=this.width.el+this.settings.margin,this.width.item=(c/this.settings.items+this.settings.margin).toFixed(3),this.dom.$items=this.dom.$stage.find(".owl-item"),this.num.items=this.dom.$items.length,this.settings.autoWidth&&this.dom.$items.css("width",""),this._coordinates=[],this.num.merged=[],d=this.settings.rtl?this.settings.center?-(this.width.el/2):0:this.settings.center?this.width.el/2:0,this.width.mergeStage=0,a=0;a<this.num.items;a++)this.settings.merge?(g=this.dom.$items.eq(a).find("[data-merge]").attr("data-merge")||1,this.settings.mergeFit&&g>this.settings.items&&(g=this.settings.items),this.num.merged.push(parseInt(g)),this.width.mergeStage+=this.width.item*this.num.merged[a]):this.num.merged.push(1),f=this.width.item*this.num.merged[a],this.settings.autoWidth&&(f=this.dom.$items.eq(a).width()+this.settings.margin,this.settings.rtl?this.dom.$items[a].style.marginLeft=this.settings.margin+"px":this.dom.$items[a].style.marginRight=this.settings.margin+"px"),this._coordinates.push(d),this.dom.$items.eq(a).data("owl-item").posLeft=h,this.dom.$items.eq(a).data("owl-item").width=f,this.settings.rtl?(d+=f,h+=f):(d-=f,h-=f),i-=Math.abs(f),this.settings.center&&(this._coordinates[a]=this.settings.rtl?this._coordinates[a]+f/2:this._coordinates[a]-f/2);for(this.width.stage=Math.abs(this.settings.autoWidth?this.settings.center?i:d:i),e=this.num.oItems+this.num.cItems,b=0;e>b;b++)this.dom.$items.eq(b).data("owl-item").indexAbs=b;this.setSizes()},e.prototype.setSizes=function(){this.settings.stagePadding!==!1&&(this.dom.oStage.style.paddingLeft=this.settings.stagePadding+"px",this.dom.oStage.style.paddingRight=this.settings.stagePadding+"px"),this.settings.rtl?b.setTimeout(a.proxy(function(){this.dom.stage.style.width=this.width.stage+"px"},this),0):this.dom.stage.style.width=this.width.stage+"px";for(var c=0;c<this.num.items;c++)this.settings.autoWidth||(this.dom.$items[c].style.width=this.width.item-this.settings.margin+"px"),this.settings.rtl?this.dom.$items[c].style.marginLeft=this.settings.margin+"px":this.dom.$items[c].style.marginRight=this.settings.margin+"px",1===this.num.merged[c]||this.settings.autoWidth||(this.dom.$items[c].style.width=this.width.item*this.num.merged[c]-this.settings.margin+"px");this.width.stagePrev=this.width.stage},e.prototype.responsive=function(){if(!this.num.oItems)return!1;var a=this.isElWidthChanged();return a?this.trigger("resize").isDefaultPrevented()?!1:(this.state.responsive=!0,this.refresh(),this.state.responsive=!1,void this.trigger("resized")):!1},e.prototype.refresh=function(){var a=this.dom.$oItems&&this.dom.$oItems.eq(this.normalize(this.current(),!0));return this.trigger("refresh"),this.setResponsiveOptions(),this.updateLocalContent(),this.optionsLogic(),0===this.num.oItems?!1:(this.dom.$stage.addClass("owl-refresh"),this.reClone(),this.calculate(),this.dom.$stage.removeClass("owl-refresh"),a?this.reset(a.data("owl-item").indexAbs):(this.dom.oStage.scrollLeft=0,this.reset(this.dom.$oItems.eq(0).data("owl-item").indexAbs)),this.state.orientation=b.orientation,this.watchVisibility(),void this.trigger("refreshed"))},e.prototype.updateActiveItems=function(){this.trigger("change",{property:{name:"items",value:this.dom.$items}});var a,b,c,d,e,f;for(a=0;a<this.num.items;a++)this.dom.$items.eq(a).data("owl-item").active=!1,this.dom.$items.eq(a).data("owl-item").current=!1,this.dom.$items.eq(a).removeClass(this.settings.activeClass).removeClass(this.settings.centerClass);for(this.num.active=0,padding=2*this.settings.stagePadding,stageX=this.coordinates(this.current())+padding,view=this.settings.rtl?this.width.view:-this.width.view,b=0;b<this.num.items;b++)c=this.dom.$items.eq(b),d=c.data("owl-item").posLeft,e=c.data("owl-item").width,f=this.settings.rtl?d-e-padding:d-e+padding,(this.op(d,"<=",stageX)&&this.op(d,">",stageX+view)||this.op(f,"<",stageX)&&this.op(f,">",stageX+view))&&(this.num.active++,c.data("owl-item").active=!0,c.data("owl-item").current=!0,c.addClass(this.settings.activeClass),this.settings.lazyLoad||(c.data("owl-item").loaded=!0),this.settings.loop&&this.updateClonedItemsState(c.data("owl-item").index));this.settings.center&&(this.dom.$items.eq(this.current()).addClass(this.settings.centerClass).data("owl-item").center=!0),this.trigger("changed",{property:{name:"items",value:this.dom.$items}})},e.prototype.updateClonedItemsState=function(a){var b,c,d;for(this.settings.center&&(b=this.dom.$items.eq(this.current()).data("owl-item").index),d=0;d<this.num.items;d++)c=this.dom.$items.eq(d),c.data("owl-item").index===a&&(c.data("owl-item").current=!0,c.data("owl-item").index===b&&c.addClass(this.settings.centerClass))},e.prototype.eventsCall=function(){this.e._onDragStart=a.proxy(function(a){this.onDragStart(a)},this),this.e._onDragMove=a.proxy(function(a){this.onDragMove(a)},this),this.e._onDragEnd=a.proxy(function(a){this.onDragEnd(a)},this),this.e._transitionEnd=a.proxy(function(a){this.transitionEnd(a)},this),this.e._resizer=a.proxy(function(){this.responsiveTimer()},this),this.e._responsiveCall=a.proxy(function(){this.responsive()},this),this.e._preventClick=a.proxy(function(a){this.preventClick(a)},this)},e.prototype.responsiveTimer=function(){return this.viewport()===this.width.prevWindow?!1:(b.clearTimeout(this.resizeTimer),this.resizeTimer=b.setTimeout(this.e._responsiveCall,this.settings.responsiveRefreshRate),void(this.width.prevWindow=this.viewport()))},e.prototype.internalEvents=function(){var a=j(),d=k();this.dragType=a&&!d?["touchstart","touchmove","touchend","touchcancel"]:a&&d?["MSPointerDown","MSPointerMove","MSPointerUp","MSPointerCancel"]:["mousedown","mousemove","mouseup"],(a||d)&&this.settings.touchDrag?this.on(c,this.dragType[3],this.e._onDragEnd):(this.dom.$stage.on("dragstart",function(){return!1}),this.settings.mouseDrag?this.dom.stage.onselectstart=function(){return!1}:this.dom.$el.addClass("owl-text-select-on")),this.transitionEndVendor&&this.on(this.dom.stage,this.transitionEndVendor,this.e._transitionEnd,!1),this.settings.responsive!==!1&&this.on(b,"resize",this.e._resizer,!1),this.dragEvents()},e.prototype.dragEvents=function(){!this.settings.touchDrag||"touchstart"!==this.dragType[0]&&"MSPointerDown"!==this.dragType[0]?this.settings.mouseDrag&&"mousedown"===this.dragType[0]?this.on(this.dom.stage,this.dragType[0],this.e._onDragStart,!1):this.off(this.dom.stage,this.dragType[0],this.e._onDragStart):this.on(this.dom.stage,this.dragType[0],this.e._onDragStart,!1)},e.prototype.onDragStart=function(a){var d,e,f,g,h;if(d=a.originalEvent||a||b.event,3===d.which)return!1;if("mousedown"===this.dragType[0]&&this.dom.$stage.addClass("owl-grab"),this.trigger("drag"),this.drag.startTime=(new Date).getTime(),this.speed(0),this.state.isTouch=!0,this.state.isScrolling=!1,this.state.isSwiping=!1,this.drag.distance=0,e="touchstart"===d.type,f=e?a.targetTouches[0].pageX:d.pageX||d.clientX,g=e?a.targetTouches[0].pageY:d.pageY||d.clientY,this.drag.offsetX=this.dom.$stage.position().left-this.settings.stagePadding,this.drag.offsetY=this.dom.$stage.position().top,this.settings.rtl&&(this.drag.offsetX=this.dom.$stage.position().left+this.width.stage-this.width.el+this.settings.margin),this.state.inMotion&&this.support3d)h=this.getTransformProperty(),this.drag.offsetX=h,this.animate(h),this.state.inMotion=!0;else if(this.state.inMotion&&!this.support3d)return this.state.inMotion=!1,!1;this.drag.startX=f-this.drag.offsetX,this.drag.startY=g-this.drag.offsetY,this.drag.start=f-this.drag.startX,this.drag.targetEl=d.target||d.srcElement,this.drag.updatedX=this.drag.start,("IMG"===this.drag.targetEl.tagName||"A"===this.drag.targetEl.tagName)&&(this.drag.targetEl.draggable=!1),this.on(c,this.dragType[1],this.e._onDragMove,!1),this.on(c,this.dragType[2],this.e._onDragEnd,!1)},e.prototype.onDragMove=function(a){var c,e,f,g,h,i,j;this.state.isTouch&&(this.state.isScrolling||(c=a.originalEvent||a||b.event,e="touchmove"==c.type,f=e?c.targetTouches[0].pageX:c.pageX||c.clientX,g=e?c.targetTouches[0].pageY:c.pageY||c.clientY,this.drag.currentX=f-this.drag.startX,this.drag.currentY=g-this.drag.startY,this.drag.distance=this.drag.currentX-this.drag.offsetX,this.drag.distance<0?this.state.direction=this.settings.rtl?"right":"left":this.drag.distance>0&&(this.state.direction=this.settings.rtl?"left":"right"),this.settings.loop?this.op(this.drag.currentX,">",this.coordinates(this.minimum()))&&"right"===this.state.direction?this.drag.currentX-=(this.settings.center&&this.coordinates(0))-this.coordinates(this.num.oItems):this.op(this.drag.currentX,"<",this.coordinates(this.maximum()))&&"left"===this.state.direction&&(this.drag.currentX+=(this.settings.center&&this.coordinates(0))-this.coordinates(this.num.oItems)):(h=this.coordinates(this.settings.rtl?this.maximum():this.minimum()),i=this.coordinates(this.settings.rtl?this.minimum():this.maximum()),j=this.settings.pullDrag?this.drag.distance/5:0,this.drag.currentX=Math.max(Math.min(this.drag.currentX,h+j),i+j)),(this.drag.distance>8||this.drag.distance<-8)&&(c.preventDefault!==d?c.preventDefault():c.returnValue=!1,this.state.isSwiping=!0),this.drag.updatedX=this.drag.currentX,(this.drag.currentY>16||this.drag.currentY<-16)&&this.state.isSwiping===!1&&(this.state.isScrolling=!0,this.drag.updatedX=this.drag.start),this.animate(this.drag.updatedX)))},e.prototype.onDragEnd=function(){var a,b,d;if(this.state.isTouch){if("mousedown"===this.dragType[0]&&this.dom.$stage.removeClass("owl-grab"),this.trigger("dragged"),this.drag.targetEl.removeAttribute("draggable"),this.state.isTouch=!1,this.state.isScrolling=!1,this.state.isSwiping=!1,0===this.drag.distance&&this.state.inMotion!==!0)return this.state.inMotion=!1,!1;this.drag.endTime=(new Date).getTime(),a=this.drag.endTime-this.drag.startTime,b=Math.abs(this.drag.distance),(b>3||a>300)&&this.removeClick(this.drag.targetEl),d=this.closest(this.drag.updatedX),this.speed(this.settings.dragEndSpeed||this.settings.smartSpeed),this.current(d),this.settings.pullDrag||this.drag.updatedX!==this.coordinates(d)||this.transitionEnd(),this.drag.distance=0,this.off(c,this.dragType[1],this.e._onDragMove),this.off(c,this.dragType[2],this.e._onDragEnd)}},e.prototype.removeClick=function(c){this.drag.targetEl=c,a(c).on("click.preventClick",this.e._preventClick),b.setTimeout(function(){a(c).off("click.preventClick")},300)},e.prototype.preventClick=function(b){b.preventDefault?b.preventDefault():b.returnValue=!1,b.stopPropagation&&b.stopPropagation(),a(b.target).off("click.preventClick")},e.prototype.getTransformProperty=function(){var a,c;return a=b.getComputedStyle(this.dom.stage,null).getPropertyValue(this.vendorName+"transform"),a=a.replace(/matrix(3d)?\(|\)/g,"").split(","),c=16===a.length,c!==!0?a[4]:a[12]},e.prototype.closest=function(b){var c=0,d=30;return this.settings.freeDrag||a.each(this.coordinates(),a.proxy(function(a,e){b>e-d&&e+d>b?c=a:this.op(b,"<",e)&&this.op(b,">",this.coordinates(a+1)||e-this.width.el)&&(c="left"===this.state.direction?a+1:a)},this)),this.settings.loop||(this.op(b,">",this.coordinates(this.minimum()))?c=b=this.minimum():this.op(b,"<",this.coordinates(this.maximum()))&&(c=b=this.maximum())),c},e.prototype.animate=function(b){this.trigger("translate"),this.state.inMotion=this.speed()>0,this.support3d?this.dom.$stage.css({transform:"translate3d("+b+"px,0px, 0px)",transition:this.speed()/1e3+"s"}):this.state.isTouch?this.dom.$stage.css({left:b+"px"}):this.dom.$stage.animate({left:b},this.speed()/1e3,this.settings.fallbackEasing,a.proxy(function(){this.state.inMotion&&this.transitionEnd()},this))},e.prototype.current=function(a){if(a===d)return this._current;if(0===this.num.oItems)return d;if(a=this.normalize(a),this._current===a)this.animate(this.coordinates(this._current));else{var b=this.trigger("change",{property:{name:"position",value:a}});b.data!==d&&(a=this.normalize(b.data)),this._current=a,this.animate(this.coordinates(this._current)),this.updateActiveItems(),this.trigger("changed",{property:{name:"position",value:this._current}})}return this._current},e.prototype.reset=function(a){this.suppress(["change","changed"]),this.speed(0),this.current(a),this.release(["change","changed"])},e.prototype.normalize=function(a,b){if(a===d||!this.dom.$items)return d;if(this.settings.loop){var c=this.dom.$items.length;a=(a%c+c)%c}else a=Math.max(this.minimum(),Math.min(this.maximum(),a));return b?this.dom.$items.eq(a).data("owl-item").index:a},e.prototype.maximum=function(){var b,c,d=this.settings;if(!d.loop&&d.center)b=this.num.oItems-1;else if(d.loop||d.center)if(d.loop||d.center)b=this.num.oItems+d.items;else{if(!d.autoWidth&&!d.merge)throw"Can not detect maximum absolute position.";revert=d.rtl?1:-1,c=this.dom.$stage.width()-this.$el.width(),a.each(this.coordinates(),function(a,d){return d*revert>=c?!1:void(b=a+1)})}else b=this.num.oItems-d.items;return b},e.prototype.minimum=function(){return this.dom.$oItems.eq(0).data("owl-item").indexAbs},e.prototype.speed=function(a){return a!==d&&(this._speed=a),this._speed},e.prototype.coordinates=function(a){return a!==d?this._coordinates[a]:this._coordinates},e.prototype.duration=function(a,b,c){return Math.min(Math.max(Math.abs(b-a),1),6)*Math.abs(c||this.settings.smartSpeed)},e.prototype.to=function(c,d){if(this.settings.loop){var e=c-this.normalize(this.current(),!0),f=this.current(),g=this.current(),h=this.current()+e,i=0>g-h?!0:!1;h<this.settings.items&&i===!1?(f=this.num.items-(this.settings.items-g)-this.settings.items,this.reset(f)):h>=this.num.items-this.settings.items&&i===!0&&(f=g-this.num.oItems,this.reset(f)),b.clearTimeout(this.e._goToLoop),this.e._goToLoop=b.setTimeout(a.proxy(function(){this.speed(this.duration(this.current(),f+e,d)),this.current(f+e)},this),30)}else this.speed(this.duration(this.current(),c,d)),this.current(c)},e.prototype.next=function(a){a=a||!1,this.to(this.normalize(this.current(),!0)+1,a)},e.prototype.prev=function(a){a=a||!1,this.to(this.normalize(this.current(),!0)-1,a)},e.prototype.transitionEnd=function(a){if(a!==d){a.stopPropagation();var b=a.target||a.srcElement||a.originalTarget;if(b!==this.dom.stage)return!1}this.state.inMotion=!1,this.trigger("translated")},e.prototype.isElWidthChanged=function(){var a=this.dom.$el.width()-this.settings.stagePadding,b=this.width.el+this.settings.margin;return a!==b},e.prototype.viewport=function(){var d;if(this.options.responsiveBaseElement!==b)d=a(this.options.responsiveBaseElement).width();else if(b.innerWidth)d=b.innerWidth;else{if(!c.documentElement||!c.documentElement.clientWidth)throw"Can not detect viewport width.";d=c.documentElement.clientWidth}return d},e.prototype.insertContent=function(a){this.dom.$stage.empty(),this.fetchContent(a),this.refresh()},e.prototype.addItem=function(a,b){var c=this.createItemContainer();b=b||0,this.initializeItemContainer(c,a),0===this.dom.$oItems.length?this.dom.$stage.append(c):-1!==p?this.dom.$oItems.eq(b).before(c):this.dom.$oItems.eq(b).after(c),this.refresh()},e.prototype.removeItem=function(a){this.dom.$oItems.eq(a).remove(),this.refresh()},e.prototype.addTriggerableEvents=function(){var b=a.proxy(function(b,c){return a.proxy(function(a){a.relatedTarget!==this&&(this.suppress([c]),b.apply(this,[].slice.call(arguments,1)),this.release([c]))},this)},this);a.each({next:this.next,prev:this.prev,to:this.to,destroy:this.destroy,refresh:this.refresh,replace:this.insertContent,add:this.addItem,remove:this.removeItem},a.proxy(function(a,c){this.dom.$el.on(a+".owl.carousel",b(c,a+".owl.carousel"))},this))},e.prototype.watchVisibility=function(){function c(a){return a.offsetWidth>0&&a.offsetHeight>0}function d(){c(this.dom.el)&&(this.dom.$el.removeClass("owl-hidden"),this.refresh(),b.clearInterval(this.e._checkVisibile))}c(this.dom.el)||(this.dom.$el.addClass("owl-hidden"),b.clearInterval(this.e._checkVisibile),this.e._checkVisibile=b.setInterval(a.proxy(d,this),500))},e.prototype.preloadAutoWidthImages=function(b){var c,d,e,f;c=0,d=this,b.each(function(g,h){e=a(h),f=new Image,f.onload=function(){c++,e.attr("src",f.src),e.css("opacity",1),c>=b.length&&(d.state.imagesLoaded=!0,d.init())},f.src=e.attr("src")||e.attr("data-src")||e.attr("data-src-retina")})},e.prototype.destroy=function(){this.dom.$el.hasClass(this.settings.themeClass)&&this.dom.$el.removeClass(this.settings.themeClass),this.settings.responsive!==!1&&this.off(b,"resize",this.e._resizer),this.transitionEndVendor&&this.off(this.dom.stage,this.transitionEndVendor,this.e._transitionEnd);for(var a in this.plugins)this.plugins[a].destroy();(this.settings.mouseDrag||this.settings.touchDrag)&&(this.off(this.dom.stage,this.dragType[0],this.e._onDragStart),this.settings.mouseDrag&&this.off(c,this.dragType[3],this.e._onDragStart),this.settings.mouseDrag&&(this.dom.$stage.off("dragstart",function(){return!1}),this.dom.stage.onselectstart=function(){})),this.dom.$el.off(".owl"),null!==this.dom.$cItems&&this.dom.$cItems.remove(),this.e=null,this.dom.$el.data("owlCarousel",null),delete this.dom.el.owlCarousel,this.dom.$stage.unwrap(),this.dom.$items.unwrap(),this.dom.$items.contents().unwrap(),this.dom=null},e.prototype.op=function(a,b,c){var d=this.settings.rtl;switch(b){case"<":return d?a>c:c>a;case">":return d?c>a:a>c;case">=":return d?c>=a:a>=c;case"<=":return d?a>=c:c>=a}},e.prototype.on=function(a,b,c,d){a.addEventListener?a.addEventListener(b,c,d):a.attachEvent&&a.attachEvent("on"+b,c)},e.prototype.off=function(a,b,c,d){a.removeEventListener?a.removeEventListener(b,c,d):a.detachEvent&&a.detachEvent("on"+b,c)},e.prototype.trigger=function(b,c,d){var e={item:{count:this.num.oItems,index:this.current()}},f=a.camelCase(a.grep(["on",b,d],function(a){return a}).join("-").toLowerCase()),g=a.Event([b,"owl",d||"carousel"].join(".").toLowerCase(),a.extend({relatedTarget:this},e,c));return this._supress[g.type]||(a.each(this.plugins,function(a,b){b.onTrigger&&b.onTrigger(g)}),this.dom.$el.trigger(g),"function"==typeof this.settings[f]&&this.settings[f].apply(this,g)),g},e.prototype.suppress=function(b){a.each(b,a.proxy(function(a,b){this._supress[b]=!0},this))},e.prototype.release=function(b){a.each(b,a.proxy(function(a,b){delete this._supress[b]},this))},e.prototype.browserSupport=function(){if(this.support3d=i(),this.support3d){this.transformVendor=h();var a=["transitionend","webkitTransitionEnd","transitionend","oTransitionEnd"];this.transitionEndVendor=a[g()],this.vendorName=this.transformVendor.replace(/Transform/i,""),this.vendorName=""!==this.vendorName?"-"+this.vendorName.toLowerCase()+"-":""}this.state.orientation=b.orientation},a.fn.owlCarousel=function(b){return this.each(function(){a(this).data("owlCarousel")||a(this).data("owlCarousel",new e(this,b))})},a.fn.owlCarousel.Constructor=e}(window.Zepto||window.jQuery,window,document),function(a,b){LazyLoad=function(b){this.owl=b,this.owl.options=a.extend({},LazyLoad.Defaults,this.owl.options),this.handlers={"changed.owl.carousel":a.proxy(function(a){"items"==a.property.name&&a.property.value&&!a.property.value.is(":empty")&&this.check()},this)},this.owl.dom.$el.on(this.handlers)},LazyLoad.Defaults={lazyLoad:!1},LazyLoad.prototype.check=function(){var a,c,d,e,f=b.devicePixelRatio>1?"data-src-retina":"data-src";for(d=0;d<this.owl.num.items;d++)e=this.owl.dom.$items.eq(d),e.data("owl-item").current===!0&&e.data("owl-item").loaded===!1&&(c=e.find(".owl-lazy"),a=c.attr(f),a=a||c.attr("data-src"),a&&(c.css("opacity","0"),this.preload(c,e)))},LazyLoad.prototype.preload=function(c,d){var e,f,g;c.each(a.proxy(function(c,h){this.owl.trigger("load",null,"lazy"),e=a(h),f=new Image,g=e.attr(b.devicePixelRatio>1?"data-src-retina":"data-src"),g=g||e.attr("data-src"),f.onload=a.proxy(function(){d.data("owl-item").loaded=!0,e.is("img")?e.attr("src",f.src):e.css("background-image","url("+f.src+")"),e.css("opacity",1),this.owl.trigger("loaded",null,"lazy")},this),f.src=g},this))},LazyLoad.prototype.destroy=function(){var a,b;for(a in this.handlers)this.owl.dom.$el.off(a,this.handlers[a]);for(b in Object.getOwnPropertyNames(this))"function"!=typeof this[b]&&(this[b]=null)},a.fn.owlCarousel.Constructor.Plugins.lazyLoad=LazyLoad}(window.Zepto||window.jQuery,window,document),function(a,b){AutoHeight=function(b){this.owl=b,this.owl.options=a.extend({},AutoHeight.Defaults,this.owl.options),this.handlers={"changed.owl.carousel":a.proxy(function(a){"position"==a.property.name&&this.owl.settings.autoHeight&&this.setHeight()},this)},this.owl.dom.$el.on(this.handlers)},AutoHeight.Defaults={autoHeight:!1,autoHeightClass:"owl-height"},AutoHeight.prototype.setHeight=function(){var a,c=this.owl.dom.$items.eq(this.owl.current()),d=this.owl.dom.$oStage,e=0;this.owl.dom.$oStage.hasClass(this.owl.settings.autoHeightClass)||this.owl.dom.$oStage.addClass(this.owl.settings.autoHeightClass),a=b.setInterval(function(){e+=1,c.data("owl-item").loaded?(d.height(c.height()+"px"),clearInterval(a)):500===e&&clearInterval(a)},100)},AutoHeight.prototype.destroy=function(){var a,b;for(a in this.handlers)this.owl.dom.$el.off(a,this.handlers[a]);for(b in Object.getOwnPropertyNames(this))"function"!=typeof this[b]&&(this[b]=null)},a.fn.owlCarousel.Constructor.Plugins.autoHeight=AutoHeight}(window.Zepto||window.jQuery,window,document),function(a,b,c){Video=function(b){this.owl=b,this.owl.options=a.extend({},Video.Defaults,this.owl.options),this.handlers={"resize.owl.carousel":a.proxy(function(a){this.owl.settings.video&&!this.isInFullScreen()&&a.preventDefault()},this),"refresh.owl.carousel changed.owl.carousel":a.proxy(function(){this.owl.state.videoPlay&&this.stopVideo()},this),"refresh.owl.carousel refreshed.owl.carousel":a.proxy(function(a){return this.owl.settings.video?void(this.refreshing="refresh"==a.type):!1},this),"changed.owl.carousel":a.proxy(function(a){this.refreshing&&"items"==a.property.name&&a.property.value&&!a.property.value.is(":empty")&&this.checkVideoLinks()},this)},this.owl.dom.$el.on(this.handlers),this.owl.dom.$el.on("click.owl.video",".owl-video-play-icon",a.proxy(function(a){this.playVideo(a)},this))},Video.Defaults={video:!1,videoHeight:!1,videoWidth:!1},Video.prototype.checkVideoLinks=function(){var a,b,c;for(c=0;c<this.owl.num.items;c++)b=this.owl.dom.$items.eq(c),b.data("owl-item").hasVideo||(a=b.find(".owl-video"),a.length&&(this.owl.state.hasVideos=!0,this.owl.dom.$items.eq(c).data("owl-item").hasVideo=!0,a.css("display","none"),this.getVideoInfo(a,b)))},Video.prototype.getVideoInfo=function(a,b){var c,d,e,f,g=a.data("vimeo-id"),h=a.data("youtube-id"),i=a.data("width")||this.owl.settings.videoWidth,j=a.data("height")||this.owl.settings.videoHeight,k=a.attr("href");if(g)d="vimeo",e=g;else if(h)d="youtube",e=h;else{if(!k)throw new Error("Missing video link.");e=k.match(/(http:|https:|)\/\/(player.|www.)?(vimeo\.com|youtu(be\.com|\.be|be\.googleapis\.com))\/(video\/|embed\/|watch\?v=|v\/)?([A-Za-z0-9._%-]*)(\&\S+)?/),e[3].indexOf("youtu")>-1?d="youtube":e[3].indexOf("vimeo")>-1&&(d="vimeo"),e=e[6]}b.data("owl-item").videoType=d,b.data("owl-item").videoId=e,b.data("owl-item").videoWidth=i,b.data("owl-item").videoHeight=j,c={type:d,id:e},f=i&&j?'style="width:'+i+"px;height:"+j+'px;"':"",a.wrap('<div class="owl-video-wrapper"'+f+"></div>"),this.createVideoTn(a,c)},Video.prototype.createVideoTn=function(b,c){function d(a){f='<div class="owl-video-play-icon"></div>',e=k.settings.lazyLoad?'<div class="owl-video-tn '+j+'" '+i+'="'+a+'"></div>':'<div class="owl-video-tn" style="opacity:1;background-image:url('+a+')"></div>',b.after(e),b.after(f)}var e,f,g,h=b.find("img"),i="src",j="",k=this.owl;return this.owl.settings.lazyLoad&&(i="data-src",j="owl-lazy"),h.length?(d(h.attr(i)),h.remove(),!1):void("youtube"===c.type?(g="http://img.youtube.com/vi/"+c.id+"/hqdefault.jpg",d(g)):"vimeo"===c.type&&a.ajax({type:"GET",url:"http://vimeo.com/api/v2/video/"+c.id+".json",jsonp:"callback",dataType:"jsonp",success:function(a){g=a[0].thumbnail_large,d(g),k.settings.loop&&k.updateActiveItems()}}))},Video.prototype.stopVideo=function(){this.owl.trigger("stop",null,"video");var a=this.owl.dom.$items.eq(this.owl.state.videoPlayIndex);a.find(".owl-video-frame").remove(),a.removeClass("owl-video-playing"),this.owl.state.videoPlay=!1},Video.prototype.playVideo=function(b){this.owl.trigger("play",null,"video"),this.owl.state.videoPlay&&this.stopVideo();var c,d,e,f=a(b.target||b.srcElement),g=f.closest("."+this.owl.settings.itemClass);e=g.data("owl-item").videoType,id=g.data("owl-item").videoId,width=g.data("owl-item").videoWidth||Math.floor(g.data("owl-item").width-this.owl.settings.margin),height=g.data("owl-item").videoHeight||this.owl.dom.$stage.height(),"youtube"===e?c='<iframe width="'+width+'" height="'+height+'" src="http://www.youtube.com/embed/'+id+"?autoplay=1&v="+id+'" frameborder="0" allowfullscreen></iframe>':"vimeo"===e&&(c='<iframe src="http://player.vimeo.com/video/'+id+'?autoplay=1" width="'+width+'" height="'+height+'" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen></iframe>'),g.addClass("owl-video-playing"),this.owl.state.videoPlay=!0,this.owl.state.videoPlayIndex=g.data("owl-item").indexAbs,d=a('<div style="height:'+height+"px; width:"+width+'px" class="owl-video-frame">'+c+"</div>"),f.after(d)
+},Video.prototype.isInFullScreen=function(){var d=c.fullscreenElement||c.mozFullScreenElement||c.webkitFullscreenElement;return d&&a(d.parentNode).hasClass("owl-video-frame")&&(this.owl.speed(0),this.owl.state.isFullScreen=!0),d&&this.owl.state.isFullScreen&&this.owl.state.videoPlay?!1:this.owl.state.isFullScreen?(this.owl.state.isFullScreen=!1,!1):this.owl.state.videoPlay&&this.owl.state.orientation!==b.orientation?(this.owl.state.orientation=b.orientation,!1):!0},Video.prototype.destroy=function(){var a,b;this.owl.dom.$el.off("click.owl.video");for(a in this.handlers)this.owl.dom.$el.off(a,this.handlers[a]);for(b in Object.getOwnPropertyNames(this))"function"!=typeof this[b]&&(this[b]=null)},a.fn.owlCarousel.Constructor.Plugins.video=Video}(window.Zepto||window.jQuery,window,document),function(a,b,c,d){Animate=function(b){this.core=b,this.core.options=a.extend({},Animate.Defaults,this.core.options),this.swapping=!0,this.previous=d,this.next=d,this.handlers={"change.owl.carousel":a.proxy(function(a){"position"==a.property.name&&(this.previous=this.core.current(),this.next=a.property.value)},this),"drag.owl.carousel dragged.owl.carousel translated.owl.carousel":a.proxy(function(a){this.swapping="translated"==a.type},this),"translate.owl.carousel":a.proxy(function(){this.swapping&&(this.core.options.animateOut||this.core.options.animateIn)&&this.swap()},this)},this.core.dom.$el.on(this.handlers)},Animate.Defaults={animateOut:!1,animateIn:!1},Animate.prototype.swap=function(){if(1===this.core.settings.items&&this.core.support3d){this.core.speed(0);var b,c=a.proxy(this.clear,this),d=this.core.dom.$items.eq(this.previous),e=this.core.dom.$items.eq(this.next),f=this.core.settings.animateIn,g=this.core.settings.animateOut;this.core.current()!==this.previous&&(g&&(b=this.core.coordinates(this.previous)-this.core.coordinates(this.next),d.css({left:b+"px"}).addClass("animated owl-animated-out").addClass(g).one("webkitAnimationEnd mozAnimationEnd MSAnimationEnd oanimationend animationend",c)),f&&e.addClass("animated owl-animated-in").addClass(f).one("webkitAnimationEnd mozAnimationEnd MSAnimationEnd oanimationend animationend",c))}},Animate.prototype.clear=function(b){a(b.target).css({left:""}).removeClass("animated owl-animated-out owl-animated-in").removeClass(this.core.settings.animateIn).removeClass(this.core.settings.animateOut),this.core.transitionEnd()},Animate.prototype.destroy=function(){var a,b;for(a in this.handlers)this.core.dom.$el.off(a,this.handlers[a]);for(b in Object.getOwnPropertyNames(this))"function"!=typeof this[b]&&(this[b]=null)},a.fn.owlCarousel.Constructor.Plugins.Animate=Animate}(window.Zepto||window.jQuery,window,document),function(a,b,c){Autoplay=function(b){this.core=b,this.core.options=a.extend({},Autoplay.Defaults,this.core.options),this.handlers={"translated.owl.carousel refreshed.owl.carousel":a.proxy(function(){this.autoplay()},this),"play.owl.autoplay":a.proxy(function(a,b,c){this.play(b,c)},this),"stop.owl.autoplay":a.proxy(function(){this.stop()},this),"mouseover.owl.autoplay":a.proxy(function(){this.core.settings.autoplayHoverPause&&this.pause()},this),"mouseleave.owl.autoplay":a.proxy(function(){this.core.settings.autoplayHoverPause&&this.autoplay()},this)},this.core.dom.$el.on(this.handlers)},Autoplay.Defaults={autoplay:!1,autoplayTimeout:5e3,autoplayHoverPause:!1,autoplaySpeed:!1},Autoplay.prototype.autoplay=function(){this.core.settings.autoplay&&!this.core.state.videoPlay?(b.clearInterval(this.interval),this.interval=b.setInterval(a.proxy(function(){this.play()},this),this.core.settings.autoplayTimeout)):b.clearInterval(this.interval)},Autoplay.prototype.play=function(){return c.hidden===!0||this.core.state.isTouch||this.core.state.isScrolling||this.core.state.isSwiping||this.core.state.inMotion?void 0:this.core.settings.autoplay===!1?void b.clearInterval(this.interval):void this.core.next(this.core.settings.autoplaySpeed)},Autoplay.prototype.stop=function(){b.clearInterval(this.interval)},Autoplay.prototype.pause=function(){b.clearInterval(this.interval)},Autoplay.prototype.destroy=function(){var a,c;b.clearInterval(this.interval);for(a in this.handlers)this.core.dom.$el.off(a,this.handlers[a]);for(c in Object.getOwnPropertyNames(this))"function"!=typeof this[c]&&(this[c]=null)},a.fn.owlCarousel.Constructor.Plugins.autoplay=Autoplay}(window.Zepto||window.jQuery,window,document),function(a){"use strict";var b=function(c){this.core=c,this.initialized=!1,this.pages=[],this.controls={},this.template=null,this.$element=this.core.dom.$el,this.overrides={next:this.core.next,prev:this.core.prev,to:this.core.to},this.handlers={"changed.owl.carousel":a.proxy(function(b){"items"==b.property.name&&(this.initialized||(this.initialize(),this.initialized=!0),this.update(),this.draw()),this.filling&&(b.property.value.data("owl-item").dot=a(":first-child",b.property.value).find("[data-dot]").andSelf().data("dot"))},this),"change.owl.carousel":a.proxy(function(a){if("position"==a.property.name&&!this.core.state.revert&&!this.core.settings.loop&&this.core.settings.navRewind){var b=this.core.current(),c=this.core.maximum(),d=this.core.minimum();a.data=a.property.value>c?b>=c?d:c:a.property.value<d?c:a.property.value}this.filling=this.core.settings.dotsData&&"item"==a.property.name&&a.property.value&&a.property.value.is(":empty")},this),"refreshed.owl.carousel":a.proxy(function(){this.initialized&&(this.update(),this.draw())},this)},this.core.options=a.extend({},b.Defaults,this.core.options),this.$element.on(this.handlers)};b.Defaults={nav:!1,navRewind:!0,navText:["prev","next"],navSpeed:!1,navElement:"div",navContainer:!1,navContainerClass:"owl-nav",navClass:["owl-prev","owl-next"],slideBy:1,dotClass:"owl-dot",dotsClass:"owl-dots",dots:!0,dotsEach:!1,dotData:!1,dotsSpeed:!1,dotsContainer:!1,controlsClass:"owl-controls"},b.prototype.initialize=function(){var b,c,d=this.core.settings;d.dotsData||(this.template=a("<div>").addClass(d.dotClass).append(a("<span>")).prop("outerHTML")),d.navContainer&&d.dotsContainer||(this.controls.$container=a("<div>").addClass(d.controlsClass).appendTo(this.$element)),this.controls.$indicators=d.dotsContainer?a(d.dotsContainer):a("<div>").hide().addClass(d.dotsClass).appendTo(this.controls.$container),this.controls.$indicators.on(this.core.dragType[2],"div",a.proxy(function(b){var c=a(b.target).parent().is(this.controls.$indicators)?a(b.target).index():a(b.target).parent().index();b.preventDefault(),this.to(c,d.dotsSpeed)},this)),b=d.navContainer?a(d.navContainer):a("<div>").addClass(d.navContainerClass).prependTo(this.controls.$container),this.controls.$next=a("<"+d.navElement+">"),this.controls.$previous=this.controls.$next.clone(),this.controls.$previous.addClass(d.navClass[0]).html(d.navText[0]).hide().prependTo(b).on(this.core.dragType[2],a.proxy(function(){this.prev()},this)),this.controls.$next.addClass(d.navClass[1]).html(d.navText[1]).hide().appendTo(b).on(this.core.dragType[2],a.proxy(function(){this.next()},this));for(c in this.overrides)this.core[c]=a.proxy(this[c],this)},b.prototype.destroy=function(){var a,b,c,d;for(a in this.handlers)this.$element.off(a,this.handlers[a]);for(b in this.controls)this.controls[b].remove();for(d in this.overides)this.core[d]=this.overrides[d];for(c in Object.getOwnPropertyNames(this))"function"!=typeof this[c]&&(this[c]=null)},b.prototype.update=function(){var a,b,c,d=this.core.settings,e=this.core.num.cItems/2,f=this.core.num.items-e,g=d.center||d.autoWidth||d.dotData?1:d.dotsEach||d.items;if("page"!==d.slideBy&&(d.slideBy=Math.min(d.slideBy,d.items)),d.dots)for(this.pages=[],a=e,b=0,c=0;f>a;a++)(b>=g||0===b)&&(this.pages.push({start:a-e,end:a-e+g-1}),b=0,++c),b+=this.core.num.merged[a]},b.prototype.draw=function(){var b,c,d="",e=this.core.settings,f=this.core.dom.$oItems,g=this.core.normalize(this.core.current(),!0);if(!e.nav||e.loop||e.navRewind||(this.controls.$previous.toggleClass("disabled",0>=g),this.controls.$next.toggleClass("disabled",g>=this.core.maximum())),this.controls.$previous.toggle(e.nav),this.controls.$next.toggle(e.nav),e.dots){if(b=this.pages.length-this.controls.$indicators.children().length,b>0){for(c=0;c<Math.abs(b);c++)d+=e.dotData?f.eq(c).data("owl-item").dot:this.template;this.controls.$indicators.append(d)}else 0>b&&this.controls.$indicators.children().slice(b).remove();this.controls.$indicators.find(".active").removeClass("active"),this.controls.$indicators.children().eq(a.inArray(this.current(),this.pages)).addClass("active")}this.controls.$indicators.toggle(e.dots)},b.prototype.onTrigger=function(b){var c=this.core.settings;b.page={index:a.inArray(this.current(),this.pages),count:this.pages.length,size:c.center||c.autoWidth||c.dotData?1:c.dotsEach||c.items}},b.prototype.current=function(){var b=this.core.normalize(this.core.current(),!0);return a.grep(this.pages,function(a){return a.start<=b&&a.end>=b}).pop()},b.prototype.getPosition=function(b){var c,d,e=this.core.settings;return"page"==e.slideBy?(c=a.inArray(this.current(),this.pages),d=this.pages.length,b?++c:--c,c=this.pages[(c%d+d)%d].start):(c=this.core.normalize(this.core.current(),!0),d=this.core.num.oItems,b?c+=e.slideBy:c-=e.slideBy),c},b.prototype.next=function(b){a.proxy(this.overrides.to,this.core)(this.getPosition(!0),b)},b.prototype.prev=function(b){a.proxy(this.overrides.to,this.core)(this.getPosition(!1),b)},b.prototype.to=function(b,c,d){var e;d?a.proxy(this.overrides.to,this.core)(b,c):(e=this.pages.length,a.proxy(this.overrides.to,this.core)(this.pages[(b%e+e)%e].start,c))},a.fn.owlCarousel.Constructor.Plugins.Navigation=b}(window.Zepto||window.jQuery,window,document),function(a,b,c,d){"use strict";var e=function(c){this.core=c,this.hashes={},this.$element=this.core.dom.$el,this.handlers={"initialized.owl.carousel":a.proxy(function(){b.location.hash.substring(1)&&a(b).trigger("hashchange.owl.navigation")},this),"changed.owl.carousel":a.proxy(function(b){this.filling&&(b.property.value.data("owl-item").hash=a(":first-child",b.property.value).find("[data-hash]").andSelf().data("hash"),this.hashes[b.property.value.data("owl-item").hash]=b.property.value)},this),"change.owl.carousel":a.proxy(function(a){"position"==a.property.name&&this.core.current()===d&&"URLHash"==this.core.settings.startPosition&&(a.data=this.hashes[b.location.hash.substring(1)]),this.filling="item"==a.property.name&&a.property.value&&a.property.value.is(":empty")},this)},this.core.options=a.extend({},e.Defaults,this.core.options),this.$element.on(this.handlers),a(b).on("hashchange.owl.navigation",a.proxy(function(){var a=b.location.hash.substring(1),c=this.core.dom.$oItems,d=this.hashes[a]&&c.index(this.hashes[a])||0;return a?(this.core.dom.oStage.scrollLeft=0,void this.core.to(d,!1,!0)):!1},this))};e.Defaults={URLhashListener:!1},e.prototype.destroy=function(){var c,d;a(b).off("hashchange.owl.navigation");for(c in this.handlers)this.owl.dom.$el.off(c,this.handlers[c]);for(d in Object.getOwnPropertyNames(this))"function"!=typeof this[d]&&(this[d]=null)},a.fn.owlCarousel.Constructor.Plugins.Hash=e}(window.Zepto||window.jQuery,window,document);
