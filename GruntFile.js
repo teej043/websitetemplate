@@ -21,7 +21,7 @@ module.exports = function (grunt)
 			},
 			css: {
 				src: ['bower_components/bootstrap/dist/css/bootstrap.min.css',
-						'src/css/main.css'
+					'src/css/main.css'
 				],
 				dest: 'src/css/all.css'
 			}
@@ -41,8 +41,7 @@ module.exports = function (grunt)
 	      options: {
 					prefix: '<!-- @@',
 		      suffix: ' -->',
-					includesDir: 'src/includes',
-					docroot: ''
+					includesDir: 'src/includes'
 	      },
 	      // Files to perform replacements and includes with
 	      src: 'src/*.html',
